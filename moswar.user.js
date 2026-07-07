@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name           Moswar крутой
 // @author         Магнус
-// @namespace      Империум человечества 
+// @namespace      Империум человечества
 // @version        5.5
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
@@ -16,7 +16,7 @@
 
 
 
-//Функция автореги на митинги 
+//Функция автореги на митинги
 (function () {
     'use strict';
 
@@ -152,14 +152,14 @@
     // ------------------------------------------------
     // Видимость
     // ------------------------------------------------
-    function updateVisible() {
+   function updateVisible() {
 
-        btn.style.display =
-            location.pathname === "/meetings/"
-                ? "flex"
-                : "none";
+    btn.style.display =
+        location.pathname.startsWith("/meetings/")
+            ? "flex"
+            : "none";
 
-    }
+}
 
     updateVisible();
     setInterval(updateVisible,1000);
@@ -8221,4 +8221,3 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
   //# sourceMappingURL=bundle.js.map
 
 })();
-
