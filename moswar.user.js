@@ -508,13 +508,13 @@ function groupFightMakeStep()
 
             hardBtn.style.background='#009900';
 
-            hardBtn.textContent='DO HARD';
+            hardBtn.textContent='DO USUAL';
 
         } else {
 
             hardBtn.style.background='#c00000';
 
-            hardBtn.textContent='DO USUAL';
+            hardBtn.textContent='DO HARD';
 
         }
 
