@@ -14,6 +14,278 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
+
+
+//Функция автореги на митинги 
+(function () {
+    'use strict';
+
+    // ------------------------------------------------
+    // Не запускать внутри iframe
+    // ------------------------------------------------
+    if (window.top !== window.self) return;
+
+    // ------------------------------------------------
+    // Защита от повторного запуска
+    // ------------------------------------------------
+    if (window.meetButtonLoaded) return;
+    window.meetButtonLoaded = true;
+
+    // ------------------------------------------------
+    // Удаляем старую кнопку
+    // ------------------------------------------------
+    document.querySelectorAll('#mw-meeting-btn').forEach(e => e.remove());
+
+    // ------------------------------------------------
+    // Кнопка
+    // ------------------------------------------------
+    const btn = document.createElement('div');
+    btn.id = 'mw-meeting-btn';
+
+    btn.style.cssText = `
+        position:fixed;
+        left:${localStorage.getItem('mw-meeting-x') ?? 20}px;
+        top:${localStorage.getItem('mw-meeting-y') ?? 100}px;
+
+        width:300px;
+        height:100px;
+
+        background:#1976d2;
+        color:white;
+
+        border:2px solid #000;
+        border-radius:10px;
+
+        display:flex;
+        align-items:center;
+        justify-content:center;
+
+        text-align:center;
+        white-space:pre-line;
+
+        font-size:22px;
+        font-weight:bold;
+
+        cursor:grab;
+        user-select:none;
+        touch-action:none;
+
+        z-index:2147483647;
+        box-sizing:border-box;
+    `;
+
+    document.body.appendChild(btn);
+
+    // ------------------------------------------------
+    // Drag
+    // ------------------------------------------------
+    let dragging = false;
+    let moved = false;
+
+    let sx = 0;
+    let sy = 0;
+
+    let sl = 0;
+    let st = 0;
+
+    btn.addEventListener("pointerdown", e => {
+
+        dragging = true;
+        moved = false;
+
+        sx = e.clientX;
+        sy = e.clientY;
+
+        sl = btn.offsetLeft;
+        st = btn.offsetTop;
+
+        btn.setPointerCapture(e.pointerId);
+
+    });
+
+    btn.addEventListener("pointermove", e => {
+
+        if (!dragging) return;
+
+        let dx = e.clientX - sx;
+        let dy = e.clientY - sy;
+
+        if (!moved) {
+
+            if (Math.abs(dx) < 5 && Math.abs(dy) < 5)
+                return;
+
+            moved = true;
+        }
+
+        btn.style.left = Math.max(
+            0,
+            Math.min(window.innerWidth - btn.offsetWidth, sl + dx)
+        ) + "px";
+
+        btn.style.top = Math.max(
+            0,
+            Math.min(window.innerHeight - btn.offsetHeight, st + dy)
+        ) + "px";
+
+    });
+
+    btn.addEventListener("pointerup", e => {
+
+        dragging = false;
+
+        try {
+            btn.releasePointerCapture(e.pointerId);
+        } catch {}
+
+        if (moved) {
+
+            localStorage.setItem("mw-meeting-x", btn.offsetLeft);
+            localStorage.setItem("mw-meeting-y", btn.offsetTop);
+
+        }
+
+        setTimeout(() => moved = false, 50);
+
+    });
+
+    // ------------------------------------------------
+    // Видимость
+    // ------------------------------------------------
+    function updateVisible() {
+
+        btn.style.display =
+            location.pathname === "/meetings/"
+                ? "flex"
+                : "none";
+
+    }
+
+    updateVisible();
+    setInterval(updateVisible,1000);
+
+    // ------------------------------------------------
+    // Таймер
+    // ------------------------------------------------
+
+    let started = false;
+
+    let left = 20;
+
+    let seconds = 0;
+
+    let timer = null;
+
+    function draw(){
+
+        if(!started){
+
+            btn.textContent =
+`MEETINGS
+
+Нажми для запуска`;
+
+            return;
+        }
+
+        let m = Math.floor(seconds / 60);
+        let s = seconds % 60;
+
+        btn.textContent =
+`Осталось: ${left}
+
+Следующий:
+${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+
+    }
+
+    draw();
+
+    // ------------------------------------------------
+    // Отправка запроса
+    // ------------------------------------------------
+
+    function signup(){
+
+        fetch("/meetings/",{
+
+            method:"POST",
+
+            credentials:"include",
+
+            headers:{
+                "Content-Type":"application/x-www-form-urlencoded; charset=UTF-8"
+            },
+
+            body:"action=signup&ajax=1"
+
+        })
+        .then(r=>r.text())
+        .then(r=>console.log("Signup OK",r))
+        .catch(console.error);
+
+    }
+
+    // ------------------------------------------------
+    // Клик
+    // ------------------------------------------------
+
+    btn.addEventListener("click",()=>{
+
+        if(moved) return;
+
+        if(started) return;
+
+        started = true;
+
+        left = 20;
+
+        signup();
+
+        left--;
+
+        seconds = 17 * 60;
+
+        draw();
+
+        timer = setInterval(()=>{
+
+            seconds--;
+
+            if(seconds <= 0){
+
+                if(left <= 0){
+
+                    clearInterval(timer);
+
+                    btn.textContent =
+`ГОТОВО
+
+Осталось: 0`;
+
+                    return;
+                }
+
+                signup();
+
+                left--;
+
+                seconds = 17 * 60;
+
+            }
+
+            draw();
+
+        },1000);
+
+    });
+
+})();
+
+
+
+
+
 //функция сделать ход
 
 
