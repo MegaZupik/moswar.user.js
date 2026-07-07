@@ -506,15 +506,15 @@ function groupFightMakeStep()
 
         if(hardMode){
 
-            hardBtn.style.background='#c00000';
+            hardBtn.style.background='##009900';
 
-            hardBtn.textContent='HARD';
+            hardBtn.textContent='сделать HARD';
 
         } else {
 
-            hardBtn.style.background='#009900';
+            hardBtn.style.background='#c00000';
 
-            hardBtn.textContent='USUAL';
+            hardBtn.textContent='сделать USUAL';
 
         }
 
