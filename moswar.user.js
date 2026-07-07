@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества 
-// @version        4.51
+// @version        5.0
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,613 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+
+//две кнопки на прокачку покемона и на смену нефтепровода
+(function () {
+
+    'use strict';
+
+
+    // =====================================
+    // НЕ ЗАПУСКАТЬ ВНУТРИ iframe
+    // =====================================
+
+    if (window.top !== window.self) {
+        return;
+    }
+
+
+
+    // =====================================
+    // Защита от повторного запуска
+    // =====================================
+
+    if (window.mwButtonsLoaded) {
+        return;
+    }
+
+    window.mwButtonsLoaded = true;
+
+
+
+
+
+    // =====================================
+    // Удаляем старые копии
+    // =====================================
+
+    [
+        'mw-pokemon-btn',
+        'mw-hard-switch'
+    ].forEach(id => {
+
+        document.querySelectorAll('#' + id)
+            .forEach(el => el.remove());
+
+    });
+
+
+
+
+
+
+
+
+    // =====================================
+    // Универсальное перетаскивание
+    // =====================================
+
+    function makeDraggable(btn, storageName) {
+
+
+        let dragging = false;
+        let moved = false;
+
+
+        let startX = 0;
+        let startY = 0;
+
+
+        let startLeft = 0;
+        let startTop = 0;
+
+
+
+        btn.addEventListener('pointerdown', e => {
+
+
+            dragging = true;
+            moved = false;
+
+
+            startX = e.clientX;
+            startY = e.clientY;
+
+
+            startLeft = btn.offsetLeft;
+            startTop = btn.offsetTop;
+
+
+            btn.setPointerCapture(e.pointerId);
+
+        });
+
+
+
+
+
+        btn.addEventListener('pointermove', e => {
+
+
+            if (!dragging)
+                return;
+
+
+
+            let dx = e.clientX - startX;
+            let dy = e.clientY - startY;
+
+
+
+            if (!moved) {
+
+
+                if (
+                    Math.abs(dx) < 5 &&
+                    Math.abs(dy) < 5
+                ) {
+                    return;
+                }
+
+
+                moved = true;
+
+            }
+
+
+
+
+            let x = startLeft + dx;
+            let y = startTop + dy;
+
+
+
+
+            x = Math.max(
+                0,
+                Math.min(
+                    window.innerWidth - btn.offsetWidth,
+                    x
+                )
+            );
+
+
+            y = Math.max(
+                0,
+                Math.min(
+                    window.innerHeight - btn.offsetHeight,
+                    y
+                )
+            );
+
+
+
+
+            btn.style.left = x + 'px';
+            btn.style.top = y + 'px';
+
+
+
+            e.preventDefault();
+
+
+        });
+
+
+
+
+
+
+        btn.addEventListener('pointerup', e => {
+
+
+            dragging = false;
+
+
+
+            try {
+
+                btn.releasePointerCapture(e.pointerId);
+
+            } catch(err) {}
+
+
+
+
+
+            if (moved) {
+
+
+                localStorage.setItem(
+                    storageName + '-x',
+                    btn.offsetLeft
+                );
+
+
+                localStorage.setItem(
+                    storageName + '-y',
+                    btn.offsetTop
+                );
+
+
+            }
+
+
+
+
+            setTimeout(() => {
+
+                moved = false;
+
+            },50);
+
+
+        });
+
+
+
+
+        return () => moved;
+
+    }
+
+
+
+
+
+
+
+
+
+    // =====================================
+    // POKEMON
+    // =====================================
+
+
+    const pokemonBtn = document.createElement('div');
+
+
+    pokemonBtn.id = 'mw-pokemon-btn';
+
+
+    pokemonBtn.textContent =
+        'Тренировка\nпокемона';
+
+
+
+    pokemonBtn.style.cssText = `
+
+        position:fixed;
+
+        left:${localStorage.getItem('mw-pokemon-x') ?? 20}px;
+        top:${localStorage.getItem('mw-pokemon-y') ?? 100}px;
+
+
+        width:150px;
+        height:100px;
+
+
+        background:#1976d2;
+
+
+        color:white;
+
+
+        font-size:20px;
+
+
+        font-weight:bold;
+
+
+        display:flex;
+
+
+        align-items:center;
+
+
+        justify-content:center;
+
+
+        text-align:center;
+
+
+        white-space:pre-line;
+
+
+        border:2px solid black;
+
+
+        border-radius:10px;
+
+
+        cursor:grab;
+
+
+        user-select:none;
+
+
+        touch-action:none;
+
+
+        z-index:2147483647;
+
+
+        box-sizing:border-box;
+
+    `;
+
+
+
+
+    document.body.appendChild(pokemonBtn);
+
+
+
+
+    const pokemonMoved =
+        makeDraggable(
+            pokemonBtn,
+            'mw-pokemon'
+        );
+
+
+
+
+
+    pokemonBtn.addEventListener('click', async()=>{
+
+
+        if(location.pathname !== '/pokemon/')
+            return;
+
+
+        if(pokemonMoved())
+            return;
+
+
+
+
+        for(let i=1;i<=50;i++){
+
+
+            $.post(
+                '/pokemon/',
+                {
+                    action:'train-pokemon'
+                },
+                'post',
+                1
+            );
+
+
+
+            await new Promise(r =>
+                setTimeout(r,30)
+            );
+
+
+        }
+
+
+    });
+
+
+
+
+
+
+
+
+
+    // =====================================
+    // HARD / USUAL
+    // =====================================
+
+
+    const hardBtn = document.createElement('div');
+
+
+    hardBtn.id='mw-hard-switch';
+
+
+
+
+    hardBtn.style.cssText = `
+
+
+        position:fixed;
+
+
+        left:${localStorage.getItem('mw-hard-switch-x') ?? 0}px;
+
+
+        top:${localStorage.getItem('mw-hard-switch-y') ?? 50}px;
+
+
+        width:100px;
+
+
+        height:100px;
+
+
+        z-index:2147483647;
+
+
+        cursor:grab;
+
+
+        display:flex;
+
+
+        align-items:center;
+
+
+        justify-content:center;
+
+
+        font-size:24px;
+
+
+        font-weight:bold;
+
+
+        color:white;
+
+
+        border:2px solid black;
+
+
+        border-radius:8px;
+
+
+        user-select:none;
+
+
+        touch-action:none;
+
+
+        box-sizing:border-box;
+
+
+    `;
+
+
+
+
+    document.body.appendChild(hardBtn);
+
+
+
+
+    let hardMode=true;
+
+
+
+
+
+    function updateHard(){
+
+
+        if(hardMode){
+
+
+            hardBtn.style.background='#c00000';
+
+
+            hardBtn.textContent='HARD';
+
+
+        }
+        else{
+
+
+            hardBtn.style.background='#009900';
+
+
+            hardBtn.textContent='USUAL';
+
+
+        }
+
+
+    }
+
+
+
+
+
+
+    function sendMode(){
+
+
+        $.post(
+            '/neftlenin/',
+            {
+
+                action:'selectType',
+
+                type:
+                    hardMode
+                    ? 'hard'
+                    : 'usual'
+
+            },
+            'json'
+        );
+
+
+    }
+
+
+
+
+
+
+    const hardMoved =
+        makeDraggable(
+            hardBtn,
+            'mw-hard-switch'
+        );
+
+
+
+
+
+    hardBtn.addEventListener('click',()=>{
+
+
+        if(location.pathname !== '/neftlenin/')
+            return;
+
+
+
+        if(hardMoved())
+            return;
+
+
+
+
+        hardMode=!hardMode;
+
+
+
+        updateHard();
+
+
+        sendMode();
+
+
+
+    });
+
+
+
+
+
+    updateHard();
+
+
+
+
+
+
+
+
+    // =====================================
+    // Видимость кнопок
+    // =====================================
+
+
+    function checkPages(){
+
+
+
+        pokemonBtn.style.display =
+            location.pathname === '/pokemon/'
+            ? 'flex'
+            : 'none';
+
+
+
+
+
+        hardBtn.style.display =
+            location.pathname === '/neftlenin/'
+            ? 'flex'
+            : 'none';
+
+
+
+    }
+
+
+
+
+
+
+    checkPages();
+
+
+
+    setInterval(
+        checkPages,
+        1000
+    );
+
+
+
+})();
 
 
 
