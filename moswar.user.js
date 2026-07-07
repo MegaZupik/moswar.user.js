@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         barifan
 // @namespace      акулы
-// @version        4.30
+// @version        4.40
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
