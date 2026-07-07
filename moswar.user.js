@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name           Moswar крутой
-// @author         Андрей
-// @namespace      Пингвино Акулы
-// @version        4.21 (07.07.2026)
+// @author         barifan
+// @namespace      акулы
+// @version        4.30
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
