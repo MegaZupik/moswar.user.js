@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества 
-// @version        5.2
+// @version        5.3
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -506,15 +506,15 @@ function groupFightMakeStep()
 
         if(hardMode){
 
-            hardBtn.style.background='##009900';
+            hardBtn.style.background='#009900';
 
-            hardBtn.textContent='сделать HARD';
+            hardBtn.textContent='DO HARD';
 
         } else {
 
             hardBtn.style.background='#c00000';
 
-            hardBtn.textContent='сделать USUAL';
+            hardBtn.textContent='DO USUAL';
 
         }
 
