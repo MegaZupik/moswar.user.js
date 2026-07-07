@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name           Moswar крутой
-// @author         barifan
-// @namespace      акулы
+// @author         Магнус
+// @namespace      Империум человечества 
 // @version        4.40
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
