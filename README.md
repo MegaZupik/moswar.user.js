@@ -1,0 +1,1 @@
+# moswar.user.js
