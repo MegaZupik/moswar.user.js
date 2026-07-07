@@ -20,9 +20,7 @@
 (function () {
     'use strict';
 
-    if (document.getElementById('mw-make-step-btn')) {
-        return;
-    }
+    document.querySelectorAll('#mw-make-step-btn').forEach(e => e.remove());
 
     const btn = document.createElement('button');
 
