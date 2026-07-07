@@ -13,7 +13,6 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
-//123123
 
 (function() {
   let eqObserver = null;
