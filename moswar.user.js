@@ -18,8 +18,6 @@
 //тут кнопка сделать ход 
 
 (function () {
-    'use strict';
-
     document.querySelectorAll('#mw-make-step-btn').forEach(e => e.remove());
 
     const btn = document.createElement('button');
