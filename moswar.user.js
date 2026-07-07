@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name           Moswar крутой
-// @author         barifan
-// @namespace      акулы
-// @version        4.20 (17.06.2025)
+// @author         Андрей
+// @namespace      Пингвино Акулы
+// @version        4.21 (07.07.2026)
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -11,7 +11,8 @@
 // @match          https://*.moswar.net/*
 // @grant        none
 // ==/UserScript==
-
+// @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+// @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
 (function() {
   let eqObserver = null;
