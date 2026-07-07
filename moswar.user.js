@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества 
-// @version        5.0
+// @version        5.1
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -14,8 +14,63 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
+//функция сделать ход
 
-//две кнопки на прокачку покемона и на смену нефтепровода
+
+function groupFightMakeStep()
+{
+	console.log('groupFightMakeStep');
+	$("button[type=submit]").addClass('disabled').attr('disabled', 'disabled');
+	$("button[type=submit]").parents("div.center:first").find("div.hint").hide();
+	//$.post("/fight/", {action: $('#actionfield').val(), item: $("input:radio[name=item]:checked").val(), target: $("input:radio[name=target]:checked").val(), json: 1}, function(data) {
+	//});
+	var actionVal = $('#actionfield').val();
+	var postData = {action: actionVal, item: $("input:radio[name=item]:checked").val(), json: 1};
+
+	if (actionVal === 'arena') {
+        postData.target = $("input:radio[name=target]:checked").val();
+        postData.deffence = Array.from(document.querySelectorAll(`[name=blindfight-defence]`)).filter(i => i.checked).map(t => t.value);
+        postData.attack= Array.from(document.querySelectorAll(`[name=blindfight-attack]`)).filter(i => i.checked).map(t => t.value);
+    } else if (actionVal === 'usesuper') {
+		postData.target = $("input:radio[name=superhit]:checked").val();
+		var targets = [];
+		$("input[name=\"targets[]\"]:checked").each(function(){
+			targets.push($(this).val());
+		});
+		postData["targets[]"] = targets;
+	} else if (actionVal === 'useabl' && $("input[name=\"targets[]\"]:checked").length > 0) {
+        postData.target = $("input:radio[name=target]:checked").val();
+        var targets = [];
+        $("input[name=\"targets[]\"]:checked").each(function(){
+            targets.push($(this).val());
+        });
+        postData["targets[]"] = targets;
+	} else {
+		postData.target = $("input:radio[name=target]:checked").val();
+	}
+	postUrl("/fight/", postData, "post", function(data){
+		if (data.refresh) {
+			AngryAjax.goToUrl(AngryAjax.getCurrentUrl());
+		} else if (!data.standard_ajax) {
+			$("button[type=submit]").hide();
+			$("div.waiting").show();
+		}
+	});
+}
+
+
+
+
+//три кнопки на прокачку покемона и на смену нефтепровода и пропуск хода
+
+// ==UserScript==
+// @name         Moswar Buttons
+// @namespace    http://tampermonkey.net/
+// @version      1.5
+// @match        https://*.moswar.ru/*
+// @grant        none
+// ==/UserScript==
+
 (function () {
 
     'use strict';
@@ -44,21 +99,20 @@
 
 
 
-
     // =====================================
     // Удаляем старые копии
     // =====================================
 
     [
         'mw-pokemon-btn',
-        'mw-hard-switch'
+        'mw-hard-switch',
+        'mw-fight-turn'
     ].forEach(id => {
 
         document.querySelectorAll('#' + id)
             .forEach(el => el.remove());
 
     });
-
 
 
 
@@ -136,6 +190,7 @@
                 moved = true;
 
             }
+
 
 
 
@@ -222,7 +277,7 @@
 
                 moved = false;
 
-            },50);
+            }, 50);
 
 
         });
@@ -243,7 +298,7 @@
 
 
     // =====================================
-    // POKEMON
+    // КНОПКА POKEMON
     // =====================================
 
 
@@ -272,33 +327,27 @@
 
         background:#1976d2;
 
-
         color:white;
 
 
         font-size:20px;
-
 
         font-weight:bold;
 
 
         display:flex;
 
-
         align-items:center;
-
 
         justify-content:center;
 
 
         text-align:center;
 
-
         white-space:pre-line;
 
 
         border:2px solid black;
-
 
         border-radius:10px;
 
@@ -307,7 +356,6 @@
 
 
         user-select:none;
-
 
         touch-action:none;
 
@@ -321,9 +369,7 @@
 
 
 
-
     document.body.appendChild(pokemonBtn);
-
 
 
 
@@ -337,20 +383,21 @@
 
 
 
-    pokemonBtn.addEventListener('click', async()=>{
+    pokemonBtn.addEventListener('click', async () => {
 
 
-        if(location.pathname !== '/pokemon/')
+        if (location.pathname !== '/pokemon/')
             return;
 
 
-        if(pokemonMoved())
+        if (pokemonMoved())
             return;
 
 
 
 
-        for(let i=1;i<=50;i++){
+
+        for (let i = 1; i <= 50; i++) {
 
 
             $.post(
@@ -390,25 +437,21 @@
     const hardBtn = document.createElement('div');
 
 
-    hardBtn.id='mw-hard-switch';
-
+    hardBtn.id = 'mw-hard-switch';
 
 
 
     hardBtn.style.cssText = `
-
 
         position:fixed;
 
 
         left:${localStorage.getItem('mw-hard-switch-x') ?? 0}px;
 
-
         top:${localStorage.getItem('mw-hard-switch-y') ?? 50}px;
 
 
         width:100px;
-
 
         height:100px;
 
@@ -421,15 +464,12 @@
 
         display:flex;
 
-
         align-items:center;
-
 
         justify-content:center;
 
 
         font-size:24px;
-
 
         font-weight:bold;
 
@@ -439,21 +479,17 @@
 
         border:2px solid black;
 
-
         border-radius:8px;
 
 
         user-select:none;
-
 
         touch-action:none;
 
 
         box-sizing:border-box;
 
-
     `;
-
 
 
 
@@ -461,10 +497,7 @@
 
 
 
-
-    let hardMode=true;
-
-
+    let hardMode = true;
 
 
 
@@ -473,28 +506,19 @@
 
         if(hardMode){
 
-
             hardBtn.style.background='#c00000';
-
 
             hardBtn.textContent='HARD';
 
-
-        }
-        else{
-
+        } else {
 
             hardBtn.style.background='#009900';
 
-
             hardBtn.textContent='USUAL';
-
 
         }
 
-
     }
-
 
 
 
@@ -506,21 +530,13 @@
         $.post(
             '/neftlenin/',
             {
-
                 action:'selectType',
-
-                type:
-                    hardMode
-                    ? 'hard'
-                    : 'usual'
-
+                type:hardMode ? 'hard' : 'usual'
             },
             'json'
         );
 
-
     }
-
 
 
 
@@ -543,26 +559,20 @@
             return;
 
 
-
         if(hardMoved())
             return;
 
 
 
-
-        hardMode=!hardMode;
-
+        hardMode = !hardMode;
 
 
         updateHard();
 
-
         sendMode();
 
 
-
     });
-
 
 
 
@@ -576,20 +586,133 @@
 
 
 
+
     // =====================================
-    // Видимость кнопок
+    // КНОПКА ХОД
+    // =====================================
+
+
+    const fightBtn = document.createElement('div');
+
+
+    fightBtn.id = 'mw-fight-turn';
+
+
+    fightBtn.textContent = 'ХОД';
+
+
+
+
+    fightBtn.style.cssText = `
+
+        position:fixed;
+
+
+        left:${localStorage.getItem('mw-fight-turn-x') ?? 250}px;
+
+        top:${localStorage.getItem('mw-fight-turn-y') ?? 100}px;
+
+
+        width:120px;
+
+        height:120px;
+
+
+        background:#ff9800;
+
+
+        color:white;
+
+
+        font-size:28px;
+
+        font-weight:bold;
+
+
+        display:flex;
+
+
+        align-items:center;
+
+        justify-content:center;
+
+
+        border:3px solid black;
+
+
+        border-radius:50%;
+
+
+        cursor:grab;
+
+
+        user-select:none;
+
+
+        touch-action:none;
+
+
+        z-index:2147483647;
+
+
+        box-sizing:border-box;
+
+    `;
+
+
+
+    document.body.appendChild(fightBtn);
+
+
+
+
+    const fightMoved =
+        makeDraggable(
+            fightBtn,
+            'mw-fight-turn'
+        );
+
+
+
+
+
+    fightBtn.addEventListener('click',()=>{
+
+
+        if(!location.pathname.startsWith('/fight/'))
+            return;
+
+
+        if(fightMoved())
+            return;
+
+
+
+        groupFightMakeStep();
+
+
+    });
+
+
+
+
+
+
+
+
+
+    // =====================================
+    // Управление видимостью
     // =====================================
 
 
     function checkPages(){
 
 
-
         pokemonBtn.style.display =
             location.pathname === '/pokemon/'
             ? 'flex'
             : 'none';
-
 
 
 
@@ -601,8 +724,14 @@
 
 
 
-    }
 
+        fightBtn.style.display =
+            location.pathname.startsWith('/fight/')
+            ? 'flex'
+            : 'none';
+
+
+    }
 
 
 
@@ -620,7 +749,6 @@
 
 
 })();
-
 
 
 //тут что то про допинги
