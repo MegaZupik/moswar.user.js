@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества 
-// @version        4.40
+// @version        4.41
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -14,6 +14,116 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
+
+//тут кнопка сделать ход 
+
+(function () {
+    'use strict';
+
+    function createMoveButton() {
+        const btn = document.createElement('button');
+
+        btn.innerText = 'Сделать ход';
+
+        Object.assign(btn.style, {
+            position: 'absolute',
+            width: '150px',
+            height: '50px',
+            left: '20vw',
+            top: '20vh',
+            zIndex: '999999',
+            fontSize: '16px',
+            cursor: 'move',
+            touchAction: 'none'
+        });
+
+        document.body.appendChild(btn);
+
+        // Нажатие кнопки
+        btn.addEventListener('click', function (e) {
+            if (btn.dataset.dragging === 'true') {
+                btn.dataset.dragging = 'false';
+                return;
+            }
+
+            if (typeof groupFightMakeStep === 'function') {
+                groupFightMakeStep();
+            } else {
+                console.log('groupFightMakeStep не найдена');
+            }
+        });
+
+
+        // Перетаскивание
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+        let dragging = false;
+
+
+        function startDrag(e) {
+            dragging = true;
+            btn.dataset.dragging = 'false';
+
+            const point = e.touches ? e.touches[0] : e;
+
+            startX = point.clientX;
+            startY = point.clientY;
+
+            startLeft = btn.offsetLeft;
+            startTop = btn.offsetTop;
+
+            e.preventDefault();
+        }
+
+
+        function moveDrag(e) {
+            if (!dragging) return;
+
+            const point = e.touches ? e.touches[0] : e;
+
+            let newLeft = startLeft + (point.clientX - startX);
+            let newTop = startTop + (point.clientY - startY);
+
+            btn.style.left = newLeft + 'px';
+            btn.style.top = newTop + 'px';
+
+            btn.dataset.dragging = 'true';
+
+            e.preventDefault();
+        }
+
+
+        function stopDrag() {
+            dragging = false;
+        }
+
+
+        // ПК
+        btn.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', moveDrag);
+        document.addEventListener('mouseup', stopDrag);
+
+
+        // Телефон
+        btn.addEventListener('touchstart', startDrag, {passive:false});
+        document.addEventListener('touchmove', moveDrag, {passive:false});
+        document.addEventListener('touchend', stopDrag);
+    }
+
+
+    // ждём загрузку страницы игры
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', createMoveButton);
+    } else {
+        createMoveButton();
+    }
+
+})();
+
+
+//тут что то про допинги
 (function() {
   let eqObserver = null;
 
