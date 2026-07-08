@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        7.1
+// @version        7.2
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -22,37 +22,39 @@
 
 
 const STORAGE_KEY = 'mw_shop_key';
+const BUTTON_POS_KEY = 'mw_key_button_position';
 
 const BUTTON_ID = 'mw-key-button';
 const PANEL_ID = 'mw-key-panel';
 
 
 
-let SHOP_KEY = '';
+// ===============================
+// защита от двойного перехвата
+// ===============================
 
-
-
-// =============================
-// Защита от повторной установки
-// =============================
-
-if(window.mwKeyHookInstalled){
+if(window.mwKeyPanelLoaded)
     return;
-}
 
-window.mwKeyHookInstalled = true;
-
+window.mwKeyPanelLoaded = true;
 
 
 
+let SHOP_KEY =
+localStorage.getItem(STORAGE_KEY) || '';
 
-// =============================
-// Ловим ключ MosWar
-// =============================
+
+
+
+
+// ===============================
+// ловим ключ из ручной покупки
+// ===============================
 
 
 const oldSend =
 XMLHttpRequest.prototype.send;
+
 
 
 XMLHttpRequest.prototype.send =
@@ -80,29 +82,27 @@ function(body){
             if(m){
 
 
+                SHOP_KEY = m[1];
+
+
                 localStorage.setItem(
                     STORAGE_KEY,
-                    m[1]
+                    SHOP_KEY
                 );
-
-
-                SHOP_KEY=m[1];
 
 
                 console.log(
                     'MosWar key saved:',
-                    m[1]
+                    SHOP_KEY
                 );
 
 
             }
 
-
         }
 
 
-    }
-    catch(e){}
+    }catch(e){}
 
 
 
@@ -121,23 +121,23 @@ function(body){
 
 
 
-const ITEMS=[
+const ITEMS = [
 
 {
 name:'Шаурма',
-img:'/@/images/obj/box_shaurma_key.png',
+img:'/ @/images/obj/box_shaurma_key.png'.replace(' ',''),
 item:15891
 },
 
 {
 name:'Ключ',
-img:'/@/images/obj/key1.png',
+img:'/ @/images/obj/key1.png'.replace(' ',''),
 item:812
 },
 
 {
 name:'Совет',
-img:'/@/images/obj/box_sovet_2023_key.png',
+img:'/ @/images/obj/box_sovet_2023_key.png'.replace(' ',''),
 item:14818
 }
 
@@ -151,22 +151,16 @@ item:14818
 
 
 
-// =============================
-// Покупка
-// =============================
+// ===============================
+// покупка
+// ===============================
 
 
 async function buyItem(item,amount){
 
 
-
-    // каждый раз читаем актуальный ключ
-
     SHOP_KEY =
-    localStorage.getItem(
-        STORAGE_KEY
-    ) || '';
-
+    localStorage.getItem(STORAGE_KEY) || '';
 
 
 
@@ -174,7 +168,7 @@ async function buyItem(item,amount){
 
 
         alert(
-        'Сделайте одну обычную покупку ключа через игру для получения токена'
+        'Сначала сделайте одну обычную покупку ключа через игру'
         );
 
 
@@ -185,8 +179,7 @@ async function buyItem(item,amount){
 
 
 
-
-    let params =
+    let body =
     new URLSearchParams({
 
         key:SHOP_KEY,
@@ -197,8 +190,7 @@ async function buyItem(item,amount){
 
         amount:String(amount),
 
-        return_url:
-        '/berezka/section/mixed/',
+        return_url:'/berezka/section/mixed/',
 
         type:'',
 
@@ -212,95 +204,71 @@ async function buyItem(item,amount){
 
 
 
+    let r =
+    await fetch(
+        '/shop/json/',
+        {
 
-    try{
+        method:'POST',
 
+        credentials:'include',
 
-        let r =
-        await fetch(
-            '/shop/json/',
-            {
+        headers:{
 
-            method:'POST',
+        'Content-Type':
+        'application/x-www-form-urlencoded; charset=UTF-8',
 
-            credentials:'include',
+        'X-Requested-With':
+        'XMLHttpRequest'
 
-            headers:{
-
-
-            'Content-Type':
-            'application/x-www-form-urlencoded; charset=UTF-8',
-
-
-            'X-Requested-With':
-            'XMLHttpRequest'
+        },
 
 
-            },
-
-
-            body:
-            params.toString()
-
-            }
-
-        );
-
-
-
-
-
-        let data =
-        await r.json();
-
-
-
-        console.log(
-            'BUY:',
-            data
-        );
-
-
-
-
-
-        if(data.result===1){
-
-
-            location.reload();
-
-
-        }
-        else{
-
-
-            localStorage.removeItem(
-                STORAGE_KEY
-            );
-
-
-            SHOP_KEY='';
-
-
-
-            alert(
-            'Ключ устарел. Сделайте одну обычную покупку для обновления.'
-            );
-
+        body:
+        body.toString()
 
         }
 
+    );
+
+
+
+
+    let data =
+    await r.json();
+
+
+
+    console.log(data);
+
+
+
+
+    if(data.result===1){
+
+
+        location.reload();
 
 
     }
-    catch(e){
+    else{
 
 
-        console.error(e);
+        localStorage.removeItem(
+            STORAGE_KEY
+        );
+
+
+        SHOP_KEY='';
+
+
+
+        alert(
+        'Ключ устарел. Сделайте одну ручную покупку.'
+        );
 
 
     }
-
 
 }
 
@@ -312,9 +280,9 @@ async function buyItem(item,amount){
 
 
 
-// =============================
-// Панель
-// =============================
+// ===============================
+// панель ключей
+// ===============================
 
 
 function createPanel(){
@@ -341,13 +309,13 @@ display:'none',
 
 flexDirection:'column',
 
-gap:'8px',
+gap:'10px',
 
-padding:'6px',
+padding:'8px',
 
-background:'rgba(0,0,0,.6)',
+background:'rgba(0,0,0,.65)',
 
-borderRadius:'10px',
+borderRadius:'12px',
 
 zIndex:999998
 
@@ -357,11 +325,12 @@ zIndex:999998
 
 
 
-ITEMS.forEach(x=>{
+ITEMS.forEach(k=>{
 
 
 let box =
 document.createElement('div');
+
 
 box.style.textAlign='center';
 
@@ -373,11 +342,11 @@ let img =
 document.createElement('img');
 
 
-img.src=x.img;
+img.src=k.img;
 
-img.width=36;
+img.width=65;
 
-img.height=36;
+img.height=65;
 
 img.style.cursor='pointer';
 
@@ -395,23 +364,26 @@ input.min=1;
 
 input.value=1;
 
-input.style.width='45px';
+input.style.width='50px';
+
+input.style.display='block';
+
+input.style.margin='3px auto';
 
 
 
 
 
-img.onclick=function(){
+img.onclick=()=>{
 
 
 buyItem(
-x.item,
+k.item,
 Number(input.value)||1
 );
 
 
 };
-
 
 
 
@@ -441,9 +413,9 @@ document.body.appendChild(panel);
 
 
 
-// =============================
-// Кнопка
-// =============================
+// ===============================
+// кнопка открытия панели
+// ===============================
 
 
 function createButton(){
@@ -462,17 +434,56 @@ btn.id=BUTTON_ID;
 
 
 
+let saved =
+localStorage.getItem(
+BUTTON_POS_KEY
+);
+
+
+
+let left='20px';
+let top='150px';
+
+
+
+if(saved){
+
+
+try{
+
+
+let p =
+JSON.parse(saved);
+
+
+left=p.left;
+
+top=p.top;
+
+
+}catch(e){}
+
+
+
+}
+
+
+
+
+
+
+
 Object.assign(btn.style,{
 
 position:'fixed',
 
-left:'20px',
+left:left,
 
-top:'150px',
+top:top,
 
-width:'63px',
+width:'65px',
 
-height:'63px',
+height:'65px',
 
 background:'#333',
 
@@ -491,6 +502,7 @@ justifyContent:'center',
 touchAction:'none'
 
 });
+
 
 
 
@@ -527,6 +539,28 @@ let dy=0;
 
 
 
+function savePosition(){
+
+
+localStorage.setItem(
+
+BUTTON_POS_KEY,
+
+JSON.stringify({
+
+left:btn.style.left,
+
+top:btn.style.top
+
+})
+
+);
+
+
+}
+
+
+
 
 
 
@@ -548,13 +582,15 @@ dy=y-btn.offsetTop;
 
 function move(x,y){
 
+
 if(!drag)
 return;
 
 
+
 if(
-Math.abs(x-dx-btn.offsetLeft)>5 ||
-Math.abs(y-dy-btn.offsetTop)>5
+Math.abs(x-btn.offsetLeft)>5 ||
+Math.abs(y-btn.offsetTop)>5
 )
 
 moved=true;
@@ -579,9 +615,12 @@ updatePanel();
 
 
 
+
 function end(){
 
 drag=false;
+
+savePosition();
 
 }
 
@@ -630,9 +669,11 @@ t.clientX,
 t.clientY
 );
 
+
 },
 {passive:false}
 );
+
 
 
 
@@ -641,6 +682,7 @@ btn.addEventListener(
 'touchmove',
 e=>{
 
+
 let t=e.touches[0];
 
 move(
@@ -648,7 +690,9 @@ t.clientX,
 t.clientY
 );
 
+
 e.preventDefault();
+
 
 },
 {passive:false}
@@ -667,7 +711,9 @@ end
 
 
 
-btn.onclick=function(){
+
+
+btn.onclick=()=>{
 
 
 if(moved)
@@ -745,13 +791,16 @@ b.offsetHeight+
 
 
 
+
 function init(){
+
 
 createButton();
 
 createPanel();
 
 updatePanel();
+
 
 }
 
