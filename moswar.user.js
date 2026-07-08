@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        5.7
+// @version        5.8
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,17 +13,6 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
-
-//------------------------------Панель на покупку ключей -------------------------------
-// ==UserScript==
-// @name         MosWar Key Panel Touch
-// @namespace    https://www.moswar.ru/
-// @version      1.6
-// @description  Панель ключей MosWar с переносом на телефоне
-// @match        https://www.moswar.ru/*
-// @grant        none
-// @run-at       document-end
-// ==/UserScript==
 
 (function () {
     'use strict';
