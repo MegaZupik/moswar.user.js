@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        7.0
+// @version        7.1
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
