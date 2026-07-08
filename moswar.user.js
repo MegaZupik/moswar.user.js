@@ -15,7 +15,7 @@
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
 
-// ------------------Панель с ключами и другими фичами --------- 
+// ------------------Панель с ключами и другими фичами ---------
 
 (function () {
 'use strict';
@@ -762,9 +762,6 @@ window.addEventListener(
 init
 );
 
-
-
-})();
 
 
 })();
