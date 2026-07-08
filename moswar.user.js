@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        6.01
+// @version        7.0
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -16,17 +16,6 @@
 
 
 // ------------------Панель с ключами и другими фичами --------- 
-
-
-// ==UserScript==
-// @name         MosWar Key Panel LocalStorage FIX
-// @namespace    https://www.moswar.ru/
-// @version      4.1
-// @description  MosWar keys panel with auto key saving
-// @match        https://www.moswar.ru/*
-// @grant        none
-// @run-at       document-start
-// ==/UserScript==
 
 (function () {
 'use strict';
