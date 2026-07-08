@@ -15,6 +15,16 @@
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
 //------------------------------Панель на покупку ключей -------------------------------
+// ==UserScript==
+// @name         MosWar Key Panel Touch
+// @namespace    https://www.moswar.ru/
+// @version      1.6
+// @description  Панель ключей MosWar с переносом на телефоне
+// @match        https://www.moswar.ru/*
+// @grant        none
+// @run-at       document-end
+// ==/UserScript==
+
 (function () {
     'use strict';
 
@@ -25,8 +35,7 @@
 
     const BTN_ID = 'mw-key-toggle-btn';
     const PANEL_ID = 'mw-key-panel';
-
-    const POS_KEY = 'mw-key-btn-position';
+    const POS_KEY = 'mw-key-position';
 
 
 
@@ -57,53 +66,34 @@
 
 
 
-
-
     async function buyItem(item, amount){
-
 
         const body = new URLSearchParams({
 
-            key:SHOP_KEY,
-
+            key: SHOP_KEY,
             action:'buy',
-
             item:String(item),
-
             amount:String(amount),
-
             return_url:'/berezka/section/mixed/',
-
             type:'',
-
             ajax_ext:'2',
-
             autochange_honey:'0'
 
         });
 
 
+        try {
 
-        try{
-
-
-            const r = await fetch('/shop/json/',{
+            const r = await fetch('/shop/json/', {
 
                 method:'POST',
 
                 credentials:'include',
 
                 headers:{
-
-                    'Accept':
-                    'application/json, text/javascript, */*; q=0.01',
-
-                    'Content-Type':
-                    'application/x-www-form-urlencoded; charset=UTF-8',
-
-                    'X-Requested-With':
-                    'XMLHttpRequest'
-
+                    'Accept':'application/json, text/javascript, */*; q=0.01',
+                    'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With':'XMLHttpRequest'
                 },
 
                 body:body.toString()
@@ -111,11 +101,9 @@
             });
 
 
-
             const data = await r.json();
 
-
-            console.log('SHOP:',data);
+            console.log(data);
 
 
             if(data.result===1){
@@ -123,15 +111,14 @@
                 location.reload();
 
             }
-            else{
+            else {
 
                 alert('Ошибка покупки');
 
             }
 
 
-        }
-        catch(e){
+        } catch(e){
 
             console.error(e);
 
@@ -143,28 +130,21 @@
 
 
 
+    function updatePanel(){
+
+        const btn=document.getElementById(BTN_ID);
+        const panel=document.getElementById(PANEL_ID);
+
+        if(!btn || !panel)
+            return;
 
 
-    function loadButtonPosition(btn){
+        panel.style.left =
+            btn.offsetLeft+'px';
 
 
-        const saved =
-        localStorage.getItem(POS_KEY);
-
-
-        if(saved){
-
-            try{
-
-                const p=JSON.parse(saved);
-
-                btn.style.left=p.left;
-                btn.style.top=p.top;
-
-            }
-            catch{}
-
-        }
+        panel.style.top =
+            (btn.offsetTop + btn.offsetHeight + 5)+'px';
 
     }
 
@@ -173,8 +153,8 @@
 
 
 
-    function saveButtonPosition(btn){
 
+    function savePosition(btn){
 
         localStorage.setItem(
 
@@ -183,48 +163,36 @@
             JSON.stringify({
 
                 left:btn.style.left,
-
                 top:btn.style.top
 
             })
 
         );
 
-
     }
 
 
 
 
 
+    function loadPosition(btn){
 
+        const p=localStorage.getItem(POS_KEY);
 
-    function updatePanelPosition(){
-
-
-        const btn =
-        document.getElementById(BTN_ID);
-
-
-        const panel =
-        document.getElementById(PANEL_ID);
-
-
-
-        if(!btn || !panel)
+        if(!p)
             return;
 
 
+        try{
 
-        panel.style.left =
-        btn.offsetLeft+'px';
+            const pos=JSON.parse(p);
 
+            btn.style.left=pos.left;
+            btn.style.top=pos.top;
 
-        panel.style.top =
-        (btn.offsetTop + btn.offsetHeight + 5)+'px';
+        }catch{}
 
     }
-
 
 
 
@@ -233,15 +201,11 @@
 
     function createPanel(){
 
-
         if(document.getElementById(PANEL_ID))
             return;
 
 
-
-        const panel =
-        document.createElement('div');
-
+        const panel=document.createElement('div');
 
         panel.id=PANEL_ID;
 
@@ -250,19 +214,12 @@
         Object.assign(panel.style,{
 
             position:'fixed',
-
             display:'none',
-
             flexDirection:'column',
-
             gap:'8px',
-
-            padding:'5px',
-
-            background:'rgba(0,0,0,0.35)',
-
-            borderRadius:'5px',
-
+            padding:'6px',
+            background:'rgba(0,0,0,0.5)',
+            borderRadius:'8px',
             zIndex:999998
 
         });
@@ -273,26 +230,17 @@
         ITEMS.forEach(cfg=>{
 
 
-            const block =
-            document.createElement('div');
-
+            const block=document.createElement('div');
 
             block.style.textAlign='center';
 
 
 
-            const img =
-            document.createElement('img');
-
+            const img=document.createElement('img');
 
             img.src=cfg.image;
 
-
-            img.title=cfg.title;
-
-
             img.width=36;
-
             img.height=36;
 
 
@@ -300,74 +248,52 @@
 
 
 
-
-
-            const input =
-            document.createElement('input');
-
+            const input=document.createElement('input');
 
             input.type='number';
-
             input.min=1;
-
 
             input.value =
             localStorage.getItem(cfg.id+'_amount') || 1;
 
 
 
-            input.style.width='38px';
+            input.style.width='40px';
 
             input.style.textAlign='center';
 
 
 
+
+
             input.onchange=()=>{
 
-
                 localStorage.setItem(
-
                     cfg.id+'_amount',
-
                     input.value
-
                 );
 
             };
-
 
 
 
 
             img.onclick=()=>{
 
-
                 buyItem(
-
                     cfg.item,
-
                     Number(input.value)||1
-
                 );
 
             };
 
 
 
-
             img.oncontextmenu=e=>{
-
 
                 e.preventDefault();
 
-
-                buyItem(
-
-                    cfg.item,
-
-                    1
-
-                );
+                buyItem(cfg.item,1);
 
             };
 
@@ -375,9 +301,7 @@
 
 
             block.appendChild(img);
-
             block.appendChild(input);
-
 
             panel.appendChild(block);
 
@@ -387,7 +311,6 @@
 
 
         document.body.appendChild(panel);
-
 
     }
 
@@ -405,24 +328,9 @@
 
 
 
-        const btn =
-        document.createElement('img');
-
-
+        const btn=document.createElement('div');
 
         btn.id=BTN_ID;
-
-
-        btn.src='/@/images/obj/key1.png';
-
-
-        btn.title='Ключи';
-
-
-
-        btn.width=40;
-
-        btn.height=40;
 
 
 
@@ -434,75 +342,172 @@
 
             top:'150px',
 
+            width:'46px',
+
+            height:'46px',
+
+            background:'rgba(60,60,60,0.85)',
+
+            border:'2px solid #aaa',
+
+            borderRadius:'10px',
+
             zIndex:999999,
 
-            cursor:'pointer',
+            display:'flex',
 
-            userSelect:'none'
+            alignItems:'center',
+
+            justifyContent:'center',
+
+            touchAction:'none'
 
         });
 
 
 
-        loadButtonPosition(btn);
+        const img=document.createElement('img');
+
+        img.src='/@/images/obj/key1.png';
+
+        img.width=34;
+
+        img.height=34;
+
+
+        btn.appendChild(img);
 
 
 
-        let dragging=false;
+        loadPosition(btn);
+
+
+
+        let moving=false;
 
         let moved=false;
 
-        let dx=0;
+        let startX=0;
 
-        let dy=0;
+        let startY=0;
+
+        let offsetX=0;
+
+        let offsetY=0;
+
+
+
+        function start(x,y){
+
+            moving=true;
+
+            moved=false;
+
+            startX=x;
+
+            startY=y;
+
+            offsetX=x-btn.offsetLeft;
+
+            offsetY=y-btn.offsetTop;
+
+        }
+
+
+
+        function move(x,y){
+
+            if(!moving)
+                return;
+
+
+            if(
+                Math.abs(x-startX)>5 ||
+                Math.abs(y-startY)>5
+            )
+                moved=true;
+
+
+
+            btn.style.left=(x-offsetX)+'px';
+
+            btn.style.top=(y-offsetY)+'px';
+
+
+            updatePanel();
+
+        }
+
+
+
+        function end(){
+
+            if(!moving)
+                return;
+
+
+            moving=false;
+
+            savePosition(btn);
+
+        }
+
 
 
 
 
         btn.addEventListener('mousedown',e=>{
 
-
-            dragging=true;
-
-            moved=false;
-
-
-            dx=e.clientX-btn.offsetLeft;
-
-            dy=e.clientY-btn.offsetTop;
-
+            start(e.clientX,e.clientY);
 
             e.preventDefault();
 
-
         });
-
-
 
 
 
         document.addEventListener('mousemove',e=>{
 
+            move(e.clientX,e.clientY);
 
-            if(!dragging)
-                return;
-
-
-
-            moved=true;
-
-
-            btn.style.left=
-            (e.clientX-dx)+'px';
-
-
-            btn.style.top=
-            (e.clientY-dy)+'px';
+        });
 
 
 
-            updatePanelPosition();
+        document.addEventListener('mouseup',end);
 
+
+
+
+        btn.addEventListener('touchstart',e=>{
+
+            const t=e.touches[0];
+
+            start(t.clientX,t.clientY);
+
+            e.preventDefault();
+
+        },{passive:false});
+
+
+
+
+        btn.addEventListener('touchmove',e=>{
+
+            const t=e.touches[0];
+
+            move(t.clientX,t.clientY);
+
+            e.preventDefault();
+
+        },{passive:false});
+
+
+
+
+        btn.addEventListener('touchend',()=>{
+
+            end();
 
         });
 
@@ -510,29 +515,7 @@
 
 
 
-        document.addEventListener('mouseup',()=>{
-
-
-            if(!dragging)
-                return;
-
-
-
-            dragging=false;
-
-
-
-            saveButtonPosition(btn);
-
-
-        });
-
-
-
-
-
-
-        btn.onclick=()=>{
+        btn.addEventListener('click',()=>{
 
 
             if(moved)
@@ -540,9 +523,7 @@
 
 
 
-            const panel =
-            document.getElementById(PANEL_ID);
-
+            const panel=document.getElementById(PANEL_ID);
 
 
             panel.style.display =
@@ -551,13 +532,10 @@
             : 'flex';
 
 
-
-            updatePanelPosition();
-
-
-        };
+            updatePanel();
 
 
+        });
 
 
 
@@ -573,18 +551,13 @@
 
     function init(){
 
-
         createButton();
 
         createPanel();
 
-
-        updatePanelPosition();
-
+        updatePanel();
 
     }
-
-
 
 
 
@@ -592,16 +565,11 @@
 
 
 
-    setInterval(()=>{
-
-        init();
-
-    },1000);
+    setInterval(init,1000);
 
 
 
 })();
-
 
 //Функция автореги на митинги
 (function () {
