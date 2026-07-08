@@ -470,9 +470,9 @@ left:'20px',
 
 top:'150px',
 
-width:'50px',
+width:'63px',
 
-height:'50px',
+height:'63px',
 
 background:'#333',
 
@@ -503,9 +503,9 @@ document.createElement('img');
 img.src=
 '/@/images/obj/key1.png';
 
-img.width=36;
+img.width=45;
 
-img.height=36;
+img.height=45;
 
 
 
