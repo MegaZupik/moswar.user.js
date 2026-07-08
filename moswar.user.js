@@ -16,40 +16,139 @@
 
 
 // ------------------Панель с ключами и другими фичами --------- 
+
+
+// ==UserScript==
+// @name         MosWar Key Panel LocalStorage FIX
+// @namespace    https://www.moswar.ru/
+// @version      4.1
+// @description  MosWar keys panel with auto key saving
+// @match        https://www.moswar.ru/*
+// @grant        none
+// @run-at       document-start
+// ==/UserScript==
+
 (function () {
 'use strict';
 
 
-const SHOP_KEY =
-'18406ecc4c35ce990f65adb041b634cff3fb2dd8';
+const STORAGE_KEY = 'mw_shop_key';
 
-
-const BTN_ID = 'mw-key-button';
+const BUTTON_ID = 'mw-key-button';
 const PANEL_ID = 'mw-key-panel';
-const POS_KEY = 'mw-key-button-pos';
 
 
 
-const ITEMS = [
+let SHOP_KEY = '';
+
+
+
+// =============================
+// Защита от повторной установки
+// =============================
+
+if(window.mwKeyHookInstalled){
+    return;
+}
+
+window.mwKeyHookInstalled = true;
+
+
+
+
+
+// =============================
+// Ловим ключ MosWar
+// =============================
+
+
+const oldSend =
+XMLHttpRequest.prototype.send;
+
+
+XMLHttpRequest.prototype.send =
+function(body){
+
+
+    try{
+
+
+        if(body){
+
+
+            let str =
+            body.toString();
+
+
+
+            let m =
+            str.match(
+                /key=([a-z0-9]{40})/i
+            );
+
+
+
+            if(m){
+
+
+                localStorage.setItem(
+                    STORAGE_KEY,
+                    m[1]
+                );
+
+
+                SHOP_KEY=m[1];
+
+
+                console.log(
+                    'MosWar key saved:',
+                    m[1]
+                );
+
+
+            }
+
+
+        }
+
+
+    }
+    catch(e){}
+
+
+
+    return oldSend.apply(
+        this,
+        arguments
+    );
+
+};
+
+
+
+
+
+
+
+
+
+const ITEMS=[
 
 {
-id:'shaurma',
-title:'Ключ шаурмы',
-image:'/@/images/obj/box_shaurma_key.png',
+name:'Шаурма',
+img:'/@/images/obj/box_shaurma_key.png',
 item:15891
 },
 
 {
-id:'key1',
-title:'Ключ',
-image:'/@/images/obj/key1.png',
+name:'Ключ',
+img:'/@/images/obj/key1.png',
 item:812
 },
 
 {
-id:'sovet2023',
-title:'Ключ Совета',
-image:'/@/images/obj/box_sovet_2023_key.png',
+name:'Совет',
+img:'/@/images/obj/box_sovet_2023_key.png',
 item:14818
 }
 
@@ -59,57 +158,159 @@ item:14818
 
 
 
+
+
+
+
+// =============================
+// Покупка
+// =============================
+
+
 async function buyItem(item,amount){
 
 
-let body=new URLSearchParams({
 
-key:SHOP_KEY,
-action:'buy',
-item:item,
-amount:amount,
-return_url:'/berezka/section/mixed/',
-type:'',
-ajax_ext:'2',
-autochange_honey:'0'
+    // каждый раз читаем актуальный ключ
 
-});
+    SHOP_KEY =
+    localStorage.getItem(
+        STORAGE_KEY
+    ) || '';
 
 
-let r=await fetch('/shop/json/',{
-
-method:'POST',
-
-credentials:'include',
-
-headers:{
-
-'Content-Type':
-'application/x-www-form-urlencoded; charset=UTF-8',
-
-'X-Requested-With':
-'XMLHttpRequest'
-
-},
-
-body:body.toString()
-
-});
 
 
-let data=await r.json();
+    if(!SHOP_KEY){
 
 
-console.log(data);
+        alert(
+        'Сделайте одну обычную покупку ключа через игру для получения токена'
+        );
 
 
-if(data.result===1)
+        return;
 
-location.reload();
+    }
 
-else
 
-alert('Ошибка покупки');
+
+
+
+    let params =
+    new URLSearchParams({
+
+        key:SHOP_KEY,
+
+        action:'buy',
+
+        item:String(item),
+
+        amount:String(amount),
+
+        return_url:
+        '/berezka/section/mixed/',
+
+        type:'',
+
+        ajax_ext:'2',
+
+        autochange_honey:'0'
+
+    });
+
+
+
+
+
+
+    try{
+
+
+        let r =
+        await fetch(
+            '/shop/json/',
+            {
+
+            method:'POST',
+
+            credentials:'include',
+
+            headers:{
+
+
+            'Content-Type':
+            'application/x-www-form-urlencoded; charset=UTF-8',
+
+
+            'X-Requested-With':
+            'XMLHttpRequest'
+
+
+            },
+
+
+            body:
+            params.toString()
+
+            }
+
+        );
+
+
+
+
+
+        let data =
+        await r.json();
+
+
+
+        console.log(
+            'BUY:',
+            data
+        );
+
+
+
+
+
+        if(data.result===1){
+
+
+            location.reload();
+
+
+        }
+        else{
+
+
+            localStorage.removeItem(
+                STORAGE_KEY
+            );
+
+
+            SHOP_KEY='';
+
+
+
+            alert(
+            'Ключ устарел. Сделайте одну обычную покупку для обновления.'
+            );
+
+
+        }
+
+
+
+    }
+    catch(e){
+
+
+        console.error(e);
+
+
+    }
 
 
 }
@@ -120,72 +321,11 @@ alert('Ошибка покупки');
 
 
 
-function savePos(btn){
-
-localStorage.setItem(
-
-POS_KEY,
-
-JSON.stringify({
-
-left:btn.style.left,
-top:btn.style.top
-
-})
-
-);
-
-}
 
 
-
-
-
-function loadPos(btn){
-
-let p=localStorage.getItem(POS_KEY);
-
-if(!p)return;
-
-
-try{
-
-let x=JSON.parse(p);
-
-btn.style.left=x.left;
-
-btn.style.top=x.top;
-
-}catch{}
-
-}
-
-
-
-
-
-
-function updatePanel(){
-
-
-let b=document.getElementById(BTN_ID);
-let p=document.getElementById(PANEL_ID);
-
-
-if(!b||!p)return;
-
-
-p.style.left=b.offsetLeft+'px';
-
-p.style.top=
-(b.offsetTop+b.offsetHeight+5)+'px';
-
-}
-
-
-
-
-
+// =============================
+// Панель
+// =============================
 
 
 function createPanel(){
@@ -195,12 +335,16 @@ if(document.getElementById(PANEL_ID))
 return;
 
 
-let p=document.createElement('div');
 
-p.id=PANEL_ID;
+let panel =
+document.createElement('div');
 
 
-Object.assign(p.style,{
+panel.id=PANEL_ID;
+
+
+
+Object.assign(panel.style,{
 
 position:'fixed',
 
@@ -212,9 +356,9 @@ gap:'8px',
 
 padding:'6px',
 
-background:'rgba(0,0,0,.55)',
+background:'rgba(0,0,0,.6)',
 
-borderRadius:'8px',
+borderRadius:'10px',
 
 zIndex:999998
 
@@ -224,60 +368,58 @@ zIndex:999998
 
 
 
-ITEMS.forEach(i=>{
+ITEMS.forEach(x=>{
 
 
-let box=document.createElement('div');
+let box =
+document.createElement('div');
 
 box.style.textAlign='center';
 
 
 
-let img=document.createElement('img');
 
-img.src=i.image;
+
+let img =
+document.createElement('img');
+
+
+img.src=x.img;
 
 img.width=36;
+
 img.height=36;
 
+img.style.cursor='pointer';
 
 
-let input=document.createElement('input');
+
+
+
+let input =
+document.createElement('input');
+
 
 input.type='number';
 
 input.min=1;
 
-input.value=
-localStorage.getItem(i.id+'_amount')||1;
+input.value=1;
 
-
-input.style.width='40px';
-
-input.style.textAlign='center';
-
-
-
-
-input.onchange=()=>{
-
-localStorage.setItem(
-i.id+'_amount',
-input.value
-);
-
-};
+input.style.width='45px';
 
 
 
 
 
-img.onclick=()=>{
+img.onclick=function(){
+
 
 buyItem(
-i.item,
+x.item,
 Number(input.value)||1
 );
+
 
 };
 
@@ -289,14 +431,16 @@ box.appendChild(img);
 
 box.appendChild(input);
 
-p.appendChild(box);
+
+panel.appendChild(box);
 
 
 });
 
 
 
-document.body.appendChild(p);
+document.body.appendChild(panel);
+
 
 }
 
@@ -308,18 +452,24 @@ document.body.appendChild(p);
 
 
 
+// =============================
+// Кнопка
+// =============================
+
 
 function createButton(){
 
 
-if(document.getElementById(BTN_ID))
+if(document.getElementById(BUTTON_ID))
 return;
 
 
 
-let btn=document.createElement('div');
+let btn =
+document.createElement('div');
 
-btn.id=BTN_ID;
+
+btn.id=BUTTON_ID;
 
 
 
@@ -331,15 +481,15 @@ left:'20px',
 
 top:'150px',
 
-width:'48px',
+width:'50px',
 
-height:'48px',
+height:'50px',
 
 background:'#333',
 
 border:'2px solid #aaa',
 
-borderRadius:'10px',
+borderRadius:'12px',
 
 zIndex:999999,
 
@@ -349,87 +499,73 @@ alignItems:'center',
 
 justifyContent:'center',
 
-touchAction:'none',
-
-userSelect:'none'
+touchAction:'none'
 
 });
 
 
 
-let img=document.createElement('img');
 
-img.src='/@/images/obj/key1.png';
 
-img.width=34;
+let img =
+document.createElement('img');
 
-img.height=34;
+
+img.src=
+'/@/images/obj/key1.png';
+
+img.width=36;
+
+img.height=36;
+
 
 
 btn.appendChild(img);
 
 
 
-loadPos(btn);
 
 
 
 
-
-let down=false;
+let drag=false;
 
 let moved=false;
 
-let sx=0;
+let dx=0;
 
-let sy=0;
-
-let ox=0;
-
-let oy=0;
+let dy=0;
 
 
 
 
 
 
-btn.addEventListener('pointerdown',e=>{
+function start(x,y){
 
-
-down=true;
+drag=true;
 
 moved=false;
 
+dx=x-btn.offsetLeft;
 
-sx=e.clientX;
+dy=y-btn.offsetTop;
 
-sy=e.clientY;
-
-
-ox=e.clientX-btn.offsetLeft;
-
-oy=e.clientY-btn.offsetTop;
-
-
-btn.setPointerCapture(e.pointerId);
-
-
-});
+}
 
 
 
 
 
+function move(x,y){
 
-btn.addEventListener('pointermove',e=>{
-
-
-if(!down)return;
+if(!drag)
+return;
 
 
 if(
-Math.abs(e.clientX-sx)>5 ||
-Math.abs(e.clientY-sy)>5
+Math.abs(x-dx-btn.offsetLeft)>5 ||
+Math.abs(y-dy-btn.offsetTop)>5
 )
 
 moved=true;
@@ -437,44 +573,125 @@ moved=true;
 
 
 btn.style.left=
-(e.clientX-ox)+'px';
+(x-dx)+'px';
 
 
 btn.style.top=
-(e.clientY-oy)+'px';
+(y-dy)+'px';
 
 
 
 updatePanel();
 
 
-});
+}
+
+
+
+
+
+function end(){
+
+drag=false;
+
+}
 
 
 
 
 
 
-btn.addEventListener('pointerup',()=>{
-
-
-if(!down)return;
-
-
-down=false;
-
-
-savePos(btn);
+btn.addEventListener(
+'mousedown',
+e=>start(
+e.clientX,
+e.clientY
+)
+);
 
 
 
-if(!moved){
+document.addEventListener(
+'mousemove',
+e=>move(
+e.clientX,
+e.clientY
+)
+);
 
 
-let p=document.getElementById(PANEL_ID);
+
+document.addEventListener(
+'mouseup',
+end
+);
 
 
-p.style.display=
+
+
+
+btn.addEventListener(
+'touchstart',
+e=>{
+
+let t=e.touches[0];
+
+start(
+t.clientX,
+t.clientY
+);
+
+},
+{passive:false}
+);
+
+
+
+
+btn.addEventListener(
+'touchmove',
+e=>{
+
+let t=e.touches[0];
+
+move(
+t.clientX,
+t.clientY
+);
+
+e.preventDefault();
+
+},
+{passive:false}
+);
+
+
+
+
+
+btn.addEventListener(
+'touchend',
+end
+);
+
+
+
+
+
+btn.onclick=function(){
+
+
+if(moved)
+return;
+
+
+
+let p =
+document.getElementById(PANEL_ID);
+
+
+
+p.style.display =
 p.style.display==='flex'
 ?'none'
 :'flex';
@@ -484,17 +701,54 @@ p.style.display==='flex'
 updatePanel();
 
 
-}
+};
 
-
-});
 
 
 
 document.body.appendChild(btn);
 
+
 }
 
+
+
+
+
+
+
+
+
+function updatePanel(){
+
+
+let b =
+document.getElementById(BUTTON_ID);
+
+
+let p =
+document.getElementById(PANEL_ID);
+
+
+
+if(!b||!p)
+return;
+
+
+
+p.style.left =
+b.offsetLeft+'px';
+
+
+p.style.top =
+(
+b.offsetTop+
+b.offsetHeight+
+5
+)+'px';
+
+
+}
 
 
 
@@ -513,11 +767,15 @@ updatePanel();
 }
 
 
-init();
+
+window.addEventListener(
+'load',
+init
+);
 
 
-setInterval(init,1000);
 
+})();
 
 
 })();
