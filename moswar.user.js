@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        5.8
+// @version        6.0
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -14,552 +14,513 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
+
+// ------------------Панель с ключами и другими фичами --------- 
 (function () {
-    'use strict';
+'use strict';
 
 
-    const SHOP_KEY =
-        '18406ecc4c35ce990f65adb041b634cff3fb2dd8';
+const SHOP_KEY =
+'18406ecc4c35ce990f65adb041b634cff3fb2dd8';
 
 
-    const BTN_ID = 'mw-key-toggle-btn';
-    const PANEL_ID = 'mw-key-panel';
-    const POS_KEY = 'mw-key-position';
+const BTN_ID = 'mw-key-button';
+const PANEL_ID = 'mw-key-panel';
+const POS_KEY = 'mw-key-button-pos';
 
 
 
-    const ITEMS = [
+const ITEMS = [
 
-        {
-            id:'shaurma',
-            title:'Ключ шаурмы',
-            image:'/@/images/obj/box_shaurma_key.png',
-            item:15891
-        },
+{
+id:'shaurma',
+title:'Ключ шаурмы',
+image:'/@/images/obj/box_shaurma_key.png',
+item:15891
+},
 
-        {
-            id:'key1',
-            title:'Обычный ключ',
-            image:'/@/images/obj/key1.png',
-            item:812
-        },
+{
+id:'key1',
+title:'Ключ',
+image:'/@/images/obj/key1.png',
+item:812
+},
 
-        {
-            id:'sovet2023',
-            title:'Ключ Совета 2023',
-            image:'/@/images/obj/box_sovet_2023_key.png',
-            item:14818
-        }
+{
+id:'sovet2023',
+title:'Ключ Совета',
+image:'/@/images/obj/box_sovet_2023_key.png',
+item:14818
+}
 
-    ];
+];
 
 
 
-    async function buyItem(item, amount){
 
-        const body = new URLSearchParams({
 
-            key: SHOP_KEY,
-            action:'buy',
-            item:String(item),
-            amount:String(amount),
-            return_url:'/berezka/section/mixed/',
-            type:'',
-            ajax_ext:'2',
-            autochange_honey:'0'
+async function buyItem(item,amount){
 
-        });
 
+let body=new URLSearchParams({
 
-        try {
+key:SHOP_KEY,
+action:'buy',
+item:item,
+amount:amount,
+return_url:'/berezka/section/mixed/',
+type:'',
+ajax_ext:'2',
+autochange_honey:'0'
 
-            const r = await fetch('/shop/json/', {
+});
 
-                method:'POST',
 
-                credentials:'include',
+let r=await fetch('/shop/json/',{
 
-                headers:{
-                    'Accept':'application/json, text/javascript, */*; q=0.01',
-                    'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',
-                    'X-Requested-With':'XMLHttpRequest'
-                },
+method:'POST',
 
-                body:body.toString()
+credentials:'include',
 
-            });
+headers:{
 
+'Content-Type':
+'application/x-www-form-urlencoded; charset=UTF-8',
 
-            const data = await r.json();
+'X-Requested-With':
+'XMLHttpRequest'
 
-            console.log(data);
+},
 
+body:body.toString()
 
-            if(data.result===1){
+});
 
-                location.reload();
 
-            }
-            else {
+let data=await r.json();
 
-                alert('Ошибка покупки');
 
-            }
+console.log(data);
 
 
-        } catch(e){
+if(data.result===1)
 
-            console.error(e);
+location.reload();
 
-        }
+else
 
-    }
+alert('Ошибка покупки');
 
 
+}
 
 
 
-    function updatePanel(){
 
-        const btn=document.getElementById(BTN_ID);
-        const panel=document.getElementById(PANEL_ID);
 
-        if(!btn || !panel)
-            return;
 
 
-        panel.style.left =
-            btn.offsetLeft+'px';
+function savePos(btn){
 
+localStorage.setItem(
 
-        panel.style.top =
-            (btn.offsetTop + btn.offsetHeight + 5)+'px';
+POS_KEY,
 
-    }
+JSON.stringify({
 
+left:btn.style.left,
+top:btn.style.top
 
+})
 
+);
 
+}
 
 
 
-    function savePosition(btn){
 
-        localStorage.setItem(
 
-            POS_KEY,
+function loadPos(btn){
 
-            JSON.stringify({
+let p=localStorage.getItem(POS_KEY);
 
-                left:btn.style.left,
-                top:btn.style.top
+if(!p)return;
 
-            })
 
-        );
+try{
 
-    }
+let x=JSON.parse(p);
 
+btn.style.left=x.left;
 
+btn.style.top=x.top;
 
+}catch{}
 
+}
 
-    function loadPosition(btn){
 
-        const p=localStorage.getItem(POS_KEY);
 
-        if(!p)
-            return;
 
 
-        try{
 
-            const pos=JSON.parse(p);
+function updatePanel(){
 
-            btn.style.left=pos.left;
-            btn.style.top=pos.top;
 
-        }catch{}
+let b=document.getElementById(BTN_ID);
+let p=document.getElementById(PANEL_ID);
 
-    }
 
+if(!b||!p)return;
 
 
+p.style.left=b.offsetLeft+'px';
 
+p.style.top=
+(b.offsetTop+b.offsetHeight+5)+'px';
 
+}
 
-    function createPanel(){
 
-        if(document.getElementById(PANEL_ID))
-            return;
 
 
-        const panel=document.createElement('div');
 
-        panel.id=PANEL_ID;
 
 
+function createPanel(){
 
-        Object.assign(panel.style,{
 
-            position:'fixed',
-            display:'none',
-            flexDirection:'column',
-            gap:'8px',
-            padding:'6px',
-            background:'rgba(0,0,0,0.5)',
-            borderRadius:'8px',
-            zIndex:999998
+if(document.getElementById(PANEL_ID))
+return;
 
-        });
 
+let p=document.createElement('div');
 
+p.id=PANEL_ID;
 
 
-        ITEMS.forEach(cfg=>{
+Object.assign(p.style,{
 
+position:'fixed',
 
-            const block=document.createElement('div');
+display:'none',
 
-            block.style.textAlign='center';
+flexDirection:'column',
 
+gap:'8px',
 
+padding:'6px',
 
-            const img=document.createElement('img');
+background:'rgba(0,0,0,.55)',
 
-            img.src=cfg.image;
+borderRadius:'8px',
 
-            img.width=36;
-            img.height=36;
+zIndex:999998
 
+});
 
-            img.style.cursor='pointer';
 
 
 
-            const input=document.createElement('input');
 
-            input.type='number';
-            input.min=1;
+ITEMS.forEach(i=>{
 
-            input.value =
-            localStorage.getItem(cfg.id+'_amount') || 1;
 
+let box=document.createElement('div');
 
+box.style.textAlign='center';
 
-            input.style.width='40px';
 
-            input.style.textAlign='center';
 
+let img=document.createElement('img');
 
+img.src=i.image;
 
+img.width=36;
+img.height=36;
 
 
-            input.onchange=()=>{
 
-                localStorage.setItem(
-                    cfg.id+'_amount',
-                    input.value
-                );
+let input=document.createElement('input');
 
-            };
+input.type='number';
 
+input.min=1;
 
+input.value=
+localStorage.getItem(i.id+'_amount')||1;
 
 
-            img.onclick=()=>{
+input.style.width='40px';
 
-                buyItem(
-                    cfg.item,
-                    Number(input.value)||1
-                );
+input.style.textAlign='center';
 
-            };
 
 
 
-            img.oncontextmenu=e=>{
+input.onchange=()=>{
 
-                e.preventDefault();
+localStorage.setItem(
+i.id+'_amount',
+input.value
+);
 
-                buyItem(cfg.item,1);
+};
 
-            };
 
 
 
 
-            block.appendChild(img);
-            block.appendChild(input);
+img.onclick=()=>{
 
-            panel.appendChild(block);
+buyItem(
+i.item,
+Number(input.value)||1
+);
 
+};
 
-        });
 
 
 
-        document.body.appendChild(panel);
 
-    }
+box.appendChild(img);
 
+box.appendChild(input);
 
+p.appendChild(box);
 
 
+});
 
 
 
-    function createButton(){
+document.body.appendChild(p);
 
+}
 
-        if(document.getElementById(BTN_ID))
-            return;
 
 
 
-        const btn=document.createElement('div');
 
-        btn.id=BTN_ID;
 
 
 
-        Object.assign(btn.style,{
 
-            position:'fixed',
 
-            left:'20px',
+function createButton(){
 
-            top:'150px',
 
-            width:'46px',
+if(document.getElementById(BTN_ID))
+return;
 
-            height:'46px',
 
-            background:'rgba(60,60,60,0.85)',
 
-            border:'2px solid #aaa',
+let btn=document.createElement('div');
 
-            borderRadius:'10px',
+btn.id=BTN_ID;
 
-            zIndex:999999,
 
-            display:'flex',
 
-            alignItems:'center',
+Object.assign(btn.style,{
 
-            justifyContent:'center',
+position:'fixed',
 
-            touchAction:'none'
+left:'20px',
 
-        });
+top:'150px',
 
+width:'48px',
 
+height:'48px',
 
-        const img=document.createElement('img');
+background:'#333',
 
-        img.src='/@/images/obj/key1.png';
+border:'2px solid #aaa',
 
-        img.width=34;
+borderRadius:'10px',
 
-        img.height=34;
+zIndex:999999,
 
+display:'flex',
 
-        btn.appendChild(img);
+alignItems:'center',
 
+justifyContent:'center',
 
+touchAction:'none',
 
-        loadPosition(btn);
+userSelect:'none'
 
+});
 
 
-        let moving=false;
 
-        let moved=false;
+let img=document.createElement('img');
 
-        let startX=0;
+img.src='/@/images/obj/key1.png';
 
-        let startY=0;
+img.width=34;
 
-        let offsetX=0;
+img.height=34;
 
-        let offsetY=0;
 
+btn.appendChild(img);
 
 
-        function start(x,y){
 
-            moving=true;
+loadPos(btn);
 
-            moved=false;
 
-            startX=x;
 
-            startY=y;
 
-            offsetX=x-btn.offsetLeft;
 
-            offsetY=y-btn.offsetTop;
+let down=false;
 
-        }
+let moved=false;
 
+let sx=0;
 
+let sy=0;
 
-        function move(x,y){
+let ox=0;
 
-            if(!moving)
-                return;
+let oy=0;
 
 
-            if(
-                Math.abs(x-startX)>5 ||
-                Math.abs(y-startY)>5
-            )
-                moved=true;
 
 
 
-            btn.style.left=(x-offsetX)+'px';
 
-            btn.style.top=(y-offsetY)+'px';
+btn.addEventListener('pointerdown',e=>{
 
 
-            updatePanel();
+down=true;
 
-        }
+moved=false;
 
 
+sx=e.clientX;
 
-        function end(){
+sy=e.clientY;
 
-            if(!moving)
-                return;
 
+ox=e.clientX-btn.offsetLeft;
 
-            moving=false;
+oy=e.clientY-btn.offsetTop;
 
-            savePosition(btn);
 
-        }
+btn.setPointerCapture(e.pointerId);
 
 
+});
 
 
 
-        btn.addEventListener('mousedown',e=>{
 
-            start(e.clientX,e.clientY);
 
-            e.preventDefault();
 
-        });
+btn.addEventListener('pointermove',e=>{
 
 
+if(!down)return;
 
-        document.addEventListener('mousemove',e=>{
 
-            move(e.clientX,e.clientY);
+if(
+Math.abs(e.clientX-sx)>5 ||
+Math.abs(e.clientY-sy)>5
+)
 
-        });
+moved=true;
 
 
 
-        document.addEventListener('mouseup',end);
+btn.style.left=
+(e.clientX-ox)+'px';
 
 
+btn.style.top=
+(e.clientY-oy)+'px';
 
 
-        btn.addEventListener('touchstart',e=>{
 
-            const t=e.touches[0];
+updatePanel();
 
-            start(t.clientX,t.clientY);
 
-            e.preventDefault();
+});
 
-        },{passive:false});
 
 
 
 
-        btn.addEventListener('touchmove',e=>{
 
-            const t=e.touches[0];
+btn.addEventListener('pointerup',()=>{
 
-            move(t.clientX,t.clientY);
 
-            e.preventDefault();
+if(!down)return;
 
-        },{passive:false});
 
+down=false;
 
 
+savePos(btn);
 
-        btn.addEventListener('touchend',()=>{
 
-            end();
 
-        });
+if(!moved){
 
 
+let p=document.getElementById(PANEL_ID);
 
 
+p.style.display=
+p.style.display==='flex'
+?'none'
+:'flex';
 
-        btn.addEventListener('click',()=>{
 
 
-            if(moved)
-                return;
+updatePanel();
 
 
+}
 
-            const panel=document.getElementById(PANEL_ID);
 
+});
 
-            panel.style.display =
-            panel.style.display==='flex'
-            ? 'none'
-            : 'flex';
 
 
-            updatePanel();
+document.body.appendChild(btn);
 
+}
 
-        });
 
 
 
-        document.body.appendChild(btn);
 
 
-    }
 
 
+function init(){
 
+createButton();
 
+createPanel();
 
+updatePanel();
 
-    function init(){
+}
 
-        createButton();
 
-        createPanel();
+init();
 
-        updatePanel();
 
-    }
-
-
-
-    init();
-
-
-
-    setInterval(init,1000);
+setInterval(init,1000);
 
 
 
 })();
-
 //Функция автореги на митинги
 (function () {
     'use strict';
