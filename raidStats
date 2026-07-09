@@ -1,0 +1,686 @@
+// ==UserScript==
+// @name         MosWar Primary Pass Counter
+// @namespace    http://tampermonkey.net/
+// @version      4.2
+// @description  Счетчик предметов MosWar с перемещаемой панелью
+// @match        https://www.moswar.ru/*
+// @grant        none
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+'use strict';
+
+
+
+const ITEMS = [
+
+    {
+        st:"10292",
+        name:"shuffle",
+        cost:1
+    },
+
+    {
+        st:"14820",
+        name:"top20",
+        cost:1
+    },
+
+    {
+        st:"8799",
+        name:"fight",
+        cost:15
+    }
+
+];
+
+
+
+let itemsData=[];
+
+
+
+
+// ==========================
+// Загрузка предметов
+// ==========================
+
+async function loadItems(){
+
+try{
+
+
+const r = await fetch(
+"/player/?__referrer=%2Fplayer%2F&return_url=%2Fplayer%2F&_="+Date.now(),
+{
+credentials:"include",
+headers:{
+"X-Requested-With":"XMLHttpRequest"
+}
+}
+);
+
+
+
+const json = await r.json();
+
+
+
+const doc =
+new DOMParser()
+.parseFromString(
+json.content,
+"text/html"
+);
+
+
+
+itemsData = ITEMS.map(item=>{
+
+
+const img =
+doc.querySelector(
+`img[data-st="${item.st}"]`
+);
+
+
+
+let count=0;
+
+
+
+if(img){
+
+
+const block =
+img.closest(".padding");
+
+
+
+const countNode =
+block?.querySelector(".count");
+
+
+
+if(countNode){
+
+
+count =
+Number(
+countNode.innerText.replace("#","")
+) || 0;
+
+
+}
+else if(img.title){
+
+
+const nums =
+img.title.match(
+/\d+\s*шт/g
+);
+
+
+if(nums){
+
+count =
+nums.reduce(
+(a,b)=>
+a+
+Number(
+b.match(/\d+/)[0]
+),
+0
+);
+
+}
+
+}
+
+}
+
+
+
+return {
+
+st:item.st,
+name:item.name,
+cost:item.cost,
+img:img?.src || "",
+count
+
+};
+
+
+});
+
+
+
+render();
+
+
+}
+catch(e){
+
+console.error(e);
+
+}
+
+
+}
+
+
+
+
+// ==========================
+// Списание
+// ==========================
+
+function changeItem(name){
+
+
+const item =
+itemsData.find(
+x=>x.name===name
+);
+
+
+
+if(!item)
+return;
+
+
+
+item.count -= item.cost;
+
+
+
+if(item.count<0)
+item.count=0;
+
+
+
+render();
+
+
+}
+
+
+
+
+
+// ==========================
+// Панель
+// ==========================
+
+function render(){
+
+
+let box =
+document.querySelector(
+"#mw-pass-counter"
+);
+
+
+
+if(!box){
+
+
+box=document.createElement("div");
+
+
+box.id="mw-pass-counter";
+
+
+
+box.style=`
+
+position:fixed;
+
+z-index:999999;
+
+background:rgba(0,0,0,.8);
+
+padding:8px;
+
+border-radius:8px;
+
+transform:scale(.6);
+
+transform-origin:top left;
+
+touch-action:none;
+
+cursor:move;
+
+`;
+
+
+
+document.body.appendChild(box);
+
+
+
+restorePosition(box);
+
+makeDraggable(box);
+
+
+}
+
+
+
+box.innerHTML=`
+
+<div style="
+display:flex;
+gap:12px;
+">
+
+
+${itemsData.map(i=>`
+
+<div style="
+color:white;
+text-align:center;
+">
+
+
+<img src="${i.img}" width="50">
+
+
+<div style="
+font-size:18px;
+font-weight:bold;
+">
+${i.count}
+</div>
+
+
+</div>
+
+
+`).join("")}
+
+
+</div>
+
+`;
+
+
+
+}
+
+
+
+// ==========================
+// Сохранение позиции
+// ==========================
+
+function savePosition(el){
+
+
+localStorage.setItem(
+"mw_counter_position",
+JSON.stringify({
+
+left:el.style.left,
+top:el.style.top
+
+})
+);
+
+
+}
+
+
+
+function restorePosition(el){
+
+
+const pos =
+localStorage.getItem(
+"mw_counter_position"
+);
+
+
+
+if(pos){
+
+
+const p =
+JSON.parse(pos);
+
+
+el.style.left =
+p.left;
+
+
+el.style.top =
+p.top;
+
+
+
+}
+else{
+
+
+el.style.left="20px";
+
+el.style.top="100px";
+
+
+}
+
+
+}
+
+
+
+
+// ==========================
+// Перетаскивание мышь + телефон
+// ==========================
+
+function makeDraggable(el){
+
+
+let startX=0;
+let startY=0;
+
+let startLeft=0;
+let startTop=0;
+
+
+
+function start(e){
+
+
+e.preventDefault();
+
+
+const p =
+e.touches
+?
+e.touches[0]
+:
+e;
+
+
+
+startX=p.clientX;
+startY=p.clientY;
+
+
+
+const rect =
+el.getBoundingClientRect();
+
+
+
+startLeft =
+rect.left;
+
+
+startTop =
+rect.top;
+
+
+
+document.addEventListener(
+"mousemove",
+move
+);
+
+
+document.addEventListener(
+"mouseup",
+end
+);
+
+
+document.addEventListener(
+"touchmove",
+move,
+{
+passive:false
+});
+
+
+document.addEventListener(
+"touchend",
+end
+);
+
+
+}
+
+
+
+
+function move(e){
+
+
+e.preventDefault();
+
+
+const p =
+e.touches
+?
+e.touches[0]
+:
+e;
+
+
+
+let x =
+startLeft +
+p.clientX -
+startX;
+
+
+
+let y =
+startTop +
+p.clientY -
+startY;
+
+
+
+el.style.left =
+x+"px";
+
+
+el.style.top =
+y+"px";
+
+
+}
+
+
+
+
+function end(){
+
+
+document.removeEventListener(
+"mousemove",
+move
+);
+
+
+document.removeEventListener(
+"mouseup",
+end
+);
+
+
+document.removeEventListener(
+"touchmove",
+move
+);
+
+
+document.removeEventListener(
+"touchend",
+end
+);
+
+
+
+savePosition(el);
+
+
+}
+
+
+
+el.addEventListener(
+"mousedown",
+start
+);
+
+
+el.addEventListener(
+"touchstart",
+start,
+{
+passive:false
+});
+
+
+}
+
+
+
+
+
+// ==========================
+// Кнопки
+// ==========================
+
+document.addEventListener(
+"click",
+function(e){
+
+
+const btn =
+e.target.closest(
+".worldtour__button-small"
+);
+
+
+
+if(!btn)
+return;
+
+
+
+const text =
+btn.innerText;
+
+
+
+if(
+text.includes(
+"Сменить противника"
+)
+){
+
+changeItem(
+"shuffle"
+);
+
+
+}
+
+
+
+if(
+text.includes(
+"Поиск Топ-20"
+)
+){
+
+changeItem(
+"top20"
+);
+
+
+}
+
+
+},
+true);
+
+
+
+
+
+
+// ==========================
+// Fight
+// ==========================
+
+const oldOpen =
+XMLHttpRequest.prototype.open;
+
+
+const oldSend =
+XMLHttpRequest.prototype.send;
+
+
+
+XMLHttpRequest.prototype.open =
+function(method,url){
+
+this.mw_url=url;
+
+return oldOpen.apply(
+this,
+arguments
+);
+
+};
+
+
+
+XMLHttpRequest.prototype.send =
+function(body){
+
+
+if(
+typeof body==="string"
+&&
+body.includes(
+"action=fight"
+)
+){
+
+changeItem(
+"fight"
+);
+
+
+}
+
+
+
+return oldSend.apply(
+this,
+arguments
+);
+
+
+};
+
+
+
+
+
+loadItems();
+
+
+
+})();
