@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        7.2
+// @version        8.2
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,63 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+//--------------------- обмен сири кнопка -----------------------
+(function(){
+'use strict';
+let busy=false;
+const d=t=>new Promise(r=>setTimeout(r,t));
+async function autoTrade(){
+if(busy)return;
+const n=+prompt("Сколько раз выполнить обмен?");
+if(!n||n<1)return;
+const img=document.querySelector('img[data-st="15312"]');
+if(!img)return console.log("Siri не найден");
+busy=true;
+const item=img.dataset.id;
+try{
+for(let i=1;i<=n;i++){
+await fetch("/phone/call/tradeItemView/",{
+method:"POST",
+credentials:"include",
+headers:{
+"Content-Type":"application/x-www-form-urlencoded; charset=UTF-8",
+"X-Requested-With":"XMLHttpRequest"
+},
+body:`ajax=1&item=${item}&slot=phone3`
+});
+await d(100);
+await fetch("/phone/call/giveItem/",{
+method:"POST",
+credentials:"include",
+headers:{
+"Content-Type":"application/x-www-form-urlencoded; charset=UTF-8",
+"X-Requested-With":"XMLHttpRequest"
+},
+body:"ajax=1&slot=phone3"
+});
+await d(100);
+}
+alert("Готово");
+}finally{
+busy=false;
+}
+}
+function addButton(){
+const img=document.querySelector('.object-thumbs[htab="inventory"] img[data-st="15312"]');
+if(!img)return;
+const p=img.parentElement;
+if(!p)return;
+if(p.querySelector(".mw-auto-trade"))return;
+const b=document.createElement("div");
+b.className="action mw-auto-trade";
+b.innerHTML="<span>автообмен</span>";
+b.onclick=autoTrade;
+p.appendChild(b);
+}
+addButton();
+new MutationObserver(addButton).observe(document.body,{childList:true,subtree:true});
+})();
 
 
 // ------------------Панель с ключами и другими фичами ---------
@@ -6520,12 +6577,9 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
         )
           return;
         let r = $(`
-      <div class="action use-all-siri"><span>\u043E\u0431\u043C\u0435\u043D \u0432\u0441\u0435</span></div>
+      <span></span>
     `);
-        r.on("click", async () => {
-          r.hasClass("disabled") ||
-            (r.addClass("disabled"), await Ie(), r.removeClass("disabled"));
-        }),
+        
           $(
             '.object-thumbs[htab="inventory"] img[src="/@/images/obj/phones/siri_64.png"]'
           )
