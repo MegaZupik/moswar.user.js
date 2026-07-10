@@ -50,7 +50,7 @@ body:"ajax=1&slot=phone3"
 });
 await d(100);
 }
-alert("Готово");
+console.log("Готово");
 }finally{
 busy=false;
 }
