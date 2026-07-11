@@ -955,14 +955,6 @@ function groupFightMakeStep()
 
 //три кнопки на прокачку покемона и на смену нефтепровода и пропуск хода
 
-// ==UserScript==
-// @name         Moswar Buttons
-// @namespace    http://tampermonkey.net/
-// @version      1.5
-// @match        https://*.moswar.ru/*
-// @grant        none
-// ==/UserScript==
-
 (function () {
 
     'use strict';
@@ -1641,6 +1633,19 @@ function groupFightMakeStep()
 
 
 })();
+new MutationObserver(() => {
+
+    if (
+        location.pathname === '/neftlenin/' &&
+        !document.getElementById('mw-hard-switch')
+    ) {
+        location.reload();
+    }
+
+}).observe(document.body,{
+    childList:true,
+    subtree:true
+});
 
 
 //тут что то про допинги
