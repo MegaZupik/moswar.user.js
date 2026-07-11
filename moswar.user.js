@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.4
+// @version        8.5
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -16,56 +16,7 @@
 
 
 //добавление иинформации о ракете ------------
-(function(){
-'use strict';
-
-const ITEM_REL='10874';
-const TEXT=' +1 предмет';
-
-function addText(){
-
-    let item=document.querySelector(
-        'li.object[rel="'+ITEM_REL+'"]'
-    );
-
-    if(!item)return;
-
-
-    let textBlock=item.querySelector(
-        '.characteristics div'
-    );
-
-    if(!textBlock)return;
-
-
-    if(textBlock.dataset.added)
-        return;
-
-
-    textBlock.appendChild(
-        document.createTextNode(TEXT)
-    );
-
-
-    textBlock.dataset.added='1';
-
-}
-
-
-addText();
-
-
-new MutationObserver(()=>{
-    addText();
-}).observe(
-    document.body,
-    {
-        childList:true,
-        subtree:true
-    }
-);
-
-})();
+(function(){'use strict';const ITEM_REL='10874',TEXT=' и добавь +1 предмет в слоты!';function addText(){let item=document.querySelector('li.object[rel="'+ITEM_REL+'"]');if(!item)return;let characteristics=item.querySelector('.characteristics');if(!characteristics)return;characteristics.style.height='57px';let textBlock=characteristics.querySelector('div');if(!textBlock||textBlock.dataset.added)return;textBlock.appendChild(document.createTextNode(TEXT));textBlock.dataset.added='1'}addText();new MutationObserver(addText).observe(document.body,{childList:true,subtree:true})})();
 
 
 //--------------------- обмен сири кнопка -----------------------
