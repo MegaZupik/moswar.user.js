@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.3
+// @version        8.4
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,11 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+
+//добавление иинформации о ракете ------------
+(function(){'use strict';const ITEM_REL='10874';const TEXT='Сбрасывай спутники на врагов и добавь +1 предмет в слоты!';function addText(){let item=document.querySelector('li.object[rel="'+ITEM_REL+'"]');if(!item)return;let characteristics=item.querySelector('.characteristics div');if(!characteristics)return;if(characteristics.dataset.falconAdded)return;let div=document.createElement('div');div.style.marginTop='5px';div.style.fontWeight='bold';div.style.color='green';div.textContent=TEXT;characteristics.appendChild(div);characteristics.dataset.falconAdded='1';console.log('Falcon text added')}addText();new MutationObserver(()=>{addText()}).observe(document.body,{childList:true,subtree:true})})();
+
 
 //--------------------- обмен сири кнопка -----------------------
 
