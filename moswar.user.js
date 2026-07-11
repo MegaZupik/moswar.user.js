@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.5
+// @version        8.3
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -1439,7 +1439,7 @@ function groupFightMakeStep()
     hardBtn.addEventListener('click',()=>{
 
 
-        if(location.pathname !== '/neftlenin/')
+       if(!location.pathname.startsWith('/neftlenin/'))
             return;
 
 
@@ -1601,8 +1601,7 @@ function groupFightMakeStep()
 
 
 
-        hardBtn.style.display =
-            location.pathname === '/neftlenin/'
+        hardBtn.style.display =location.pathname.startsWith('/neftlenin/')
             ? 'flex'
             : 'none';
 
