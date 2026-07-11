@@ -1,686 +1,260 @@
 // ==UserScript==
-// @name         MosWar Primary Pass Counter
+// @name         MosWar Primary Pass Counter + Raid Stats
 // @namespace    http://tampermonkey.net/
-// @version      4.2
-// @description  Счетчик предметов MosWar с перемещаемой панелью
+// @version      5.1
+// @description  Счетчик предметов MosWar с рейд статистикой
 // @match        https://www.moswar.ru/*
 // @grant        none
 // @run-at       document-idle
 // ==/UserScript==
 
-(function () {
+(function(){
 'use strict';
 
-
-
-const ITEMS = [
-
-    {
-        st:"10292",
-        name:"shuffle",
-        cost:1
-    },
-
-    {
-        st:"14820",
-        name:"top20",
-        cost:1
-    },
-
-    {
-        st:"8799",
-        name:"fight",
-        cost:15
-    }
-
+const ITEMS=[
+{st:"10292",name:"shuffle",cost:1},
+{st:"14820",name:"top20",cost:1},
+{st:"8799",name:"fight",cost:15}
 ];
 
-
-
 let itemsData=[];
-
-
-
-
-// ==========================
-// Загрузка предметов
-// ==========================
+let raidInfo={win:"-",max:"-",hype:"-",totals:"-"};
 
 async function loadItems(){
-
 try{
-
-
-const r = await fetch(
-"/player/?__referrer=%2Fplayer%2F&return_url=%2Fplayer%2F&_="+Date.now(),
-{
+const r=await fetch("/player/?__referrer=%2Fplayer%2F&return_url=%2Fplayer%2F&_="+Date.now(),{
 credentials:"include",
-headers:{
-"X-Requested-With":"XMLHttpRequest"
-}
-}
-);
+headers:{"X-Requested-With":"XMLHttpRequest"}
+});
+const json=await r.json();
+const doc=new DOMParser().parseFromString(json.content,"text/html");
 
-
-
-const json = await r.json();
-
-
-
-const doc =
-new DOMParser()
-.parseFromString(
-json.content,
-"text/html"
-);
-
-
-
-itemsData = ITEMS.map(item=>{
-
-
-const img =
-doc.querySelector(
-`img[data-st="${item.st}"]`
-);
-
-
-
+itemsData=ITEMS.map(item=>{
+const img=doc.querySelector(`img[data-st="${item.st}"]`);
 let count=0;
 
-
-
 if(img){
-
-
-const block =
-img.closest(".padding");
-
-
-
-const countNode =
-block?.querySelector(".count");
-
-
+const block=img.closest(".padding");
+const countNode=block?.querySelector(".count");
 
 if(countNode){
-
-
-count =
-Number(
-countNode.innerText.replace("#","")
-) || 0;
-
-
-}
-else if(img.title){
-
-
-const nums =
-img.title.match(
-/\d+\s*шт/g
-);
-
-
+count=Number(countNode.innerText.replace("#",""))||0;
+}else if(img.title){
+const nums=img.title.match(/\d+\s*шт/g);
 if(nums){
-
-count =
-nums.reduce(
-(a,b)=>
-a+
-Number(
-b.match(/\d+/)[0]
-),
-0
-);
-
+count=nums.reduce((a,b)=>a+Number(b.match(/\d+/)[0]),0);
 }
-
 }
-
 }
-
-
 
 return {
-
 st:item.st,
 name:item.name,
 cost:item.cost,
-img:img?.src || "",
+img:img?.src||"",
 count
-
 };
-
 
 });
 
-
-
 render();
-
-
+}catch(e){console.error(e);}
 }
-catch(e){
-
-console.error(e);
-
-}
-
-
-}
-
-
-
-
-// ==========================
-// Списание
-// ==========================
 
 function changeItem(name){
-
-
-const item =
-itemsData.find(
-x=>x.name===name
-);
-
-
-
-if(!item)
-return;
-
-
-
-item.count -= item.cost;
-
-
-
-if(item.count<0)
-item.count=0;
-
-
-
-render();
-
-
+const item=itemsData.find(x=>x.name===name);
+if(!item)return;
+item.count-=item.cost;
+if(item.count<0)item.count=0;
+updateItems();
 }
 
+function scanRaidStats(){
+const box=document.querySelector(".worldtour-stats__content");
+if(!box)return;
 
+const text=box.innerText;
 
+const win=text.match(/Сейчас за победу.*?получить до\s+(\d+)/s);
+const max=text.match(/Теоретический максимум за эту страну:\s*(\d+)/);
+const hype=text.match(/Коэффициент за ажиотаж.*?(\d+)%/s);
+const totals=document.querySelector("#pvp-totals");
 
+if(win)raidInfo.win=win[1];
+if(max)raidInfo.max=max[1];
+if(hype)raidInfo.hype=hype[1]+"%";
+if(totals)raidInfo.totals=totals.innerText.trim();
 
-// ==========================
-// Панель
-// ==========================
+updateRaidBlock();
+}
 
 function render(){
-
-
-let box =
-document.querySelector(
-"#mw-pass-counter"
-);
-
-
+let box=document.querySelector("#mw-pass-counter");
 
 if(!box){
-
-
 box=document.createElement("div");
-
-
 box.id="mw-pass-counter";
-
-
-
 box.style=`
-
 position:fixed;
-
 z-index:999999;
-
 background:rgba(0,0,0,.8);
-
 padding:8px;
-
 border-radius:8px;
-
 transform:scale(.6);
-
 transform-origin:top left;
-
 touch-action:none;
-
 cursor:move;
-
 `;
-
-
 
 document.body.appendChild(box);
-
-
-
 restorePosition(box);
-
 makeDraggable(box);
-
-
 }
-
-
 
 box.innerHTML=`
-
-<div style="
-display:flex;
-gap:12px;
-">
-
-
-${itemsData.map(i=>`
-
-<div style="
+<div id="mw-raid-stats" style="
 color:white;
 text-align:center;
-">
-
-
-<img src="${i.img}" width="50">
-
-
-<div style="
 font-size:18px;
 font-weight:bold;
-">
-${i.count}
+margin-bottom:8px;
+line-height:1.4;">
+${raidInfo.win} / ${raidInfo.max}<br>
+🔥 ${raidInfo.hype}<br>
+${raidInfo.totals}
 </div>
 
-
+<div id="mw-items" style="display:flex;gap:12px;">
+${itemsData.map(i=>`
+<div style="color:white;text-align:center;">
+<img src="${i.img}" width="50">
+<div style="font-size:18px;font-weight:bold">${i.count}</div>
 </div>
-
-
 `).join("")}
-
-
-</div>
-
-`;
-
-
-
+</div>`;
 }
 
+function updateRaidBlock(){
+const el=document.querySelector("#mw-raid-stats");
+if(!el)return;
 
+el.innerHTML=`
+${raidInfo.win} / ${raidInfo.max}<br>
+🔥 ${raidInfo.hype}<br>
+${raidInfo.totals}
+`;
+}
 
-// ==========================
-// Сохранение позиции
-// ==========================
+function updateItems(){
+const el=document.querySelector("#mw-items");
+if(!el)return;
+
+el.innerHTML=itemsData.map(i=>`
+<div style="color:white;text-align:center;">
+<img src="${i.img}" width="50">
+<div style="font-size:18px;font-weight:bold">${i.count}</div>
+</div>
+`).join("");
+}
 
 function savePosition(el){
-
-
-localStorage.setItem(
-"mw_counter_position",
-JSON.stringify({
-
+localStorage.setItem("mw_counter_position",JSON.stringify({
 left:el.style.left,
 top:el.style.top
-
-})
-);
-
-
+}));
 }
-
-
 
 function restorePosition(el){
-
-
-const pos =
-localStorage.getItem(
-"mw_counter_position"
-);
-
-
+const pos=localStorage.getItem("mw_counter_position");
 
 if(pos){
-
-
-const p =
-JSON.parse(pos);
-
-
-el.style.left =
-p.left;
-
-
-el.style.top =
-p.top;
-
-
-
-}
-else{
-
-
+const p=JSON.parse(pos);
+el.style.left=p.left;
+el.style.top=p.top;
+}else{
 el.style.left="20px";
-
 el.style.top="100px";
-
-
 }
-
-
 }
-
-
-
-
-// ==========================
-// Перетаскивание мышь + телефон
-// ==========================
 
 function makeDraggable(el){
-
-
-let startX=0;
-let startY=0;
-
-let startLeft=0;
-let startTop=0;
-
-
+let sx,sy,sl,st;
 
 function start(e){
-
-
 e.preventDefault();
+const p=e.touches?e.touches[0]:e;
+sx=p.clientX;
+sy=p.clientY;
 
+const r=el.getBoundingClientRect();
+sl=r.left;
+st=r.top;
 
-const p =
-e.touches
-?
-e.touches[0]
-:
-e;
-
-
-
-startX=p.clientX;
-startY=p.clientY;
-
-
-
-const rect =
-el.getBoundingClientRect();
-
-
-
-startLeft =
-rect.left;
-
-
-startTop =
-rect.top;
-
-
-
-document.addEventListener(
-"mousemove",
-move
-);
-
-
-document.addEventListener(
-"mouseup",
-end
-);
-
-
-document.addEventListener(
-"touchmove",
-move,
-{
-passive:false
-});
-
-
-document.addEventListener(
-"touchend",
-end
-);
-
-
+document.addEventListener("mousemove",move);
+document.addEventListener("mouseup",end);
+document.addEventListener("touchmove",move,{passive:false});
+document.addEventListener("touchend",end);
 }
-
-
-
 
 function move(e){
-
-
 e.preventDefault();
+const p=e.touches?e.touches[0]:e;
 
-
-const p =
-e.touches
-?
-e.touches[0]
-:
-e;
-
-
-
-let x =
-startLeft +
-p.clientX -
-startX;
-
-
-
-let y =
-startTop +
-p.clientY -
-startY;
-
-
-
-el.style.left =
-x+"px";
-
-
-el.style.top =
-y+"px";
-
-
+el.style.left=sl+p.clientX-sx+"px";
+el.style.top=st+p.clientY-sy+"px";
 }
-
-
-
 
 function end(){
-
-
-document.removeEventListener(
-"mousemove",
-move
-);
-
-
-document.removeEventListener(
-"mouseup",
-end
-);
-
-
-document.removeEventListener(
-"touchmove",
-move
-);
-
-
-document.removeEventListener(
-"touchend",
-end
-);
-
-
-
+document.removeEventListener("mousemove",move);
+document.removeEventListener("mouseup",end);
+document.removeEventListener("touchmove",move);
+document.removeEventListener("touchend",end);
 savePosition(el);
-
-
 }
 
+el.addEventListener("mousedown",start);
+el.addEventListener("touchstart",start,{passive:false});
+}
+
+document.addEventListener("click",e=>{
+const btn=e.target.closest(".worldtour__button-small");
+if(!btn)return;
+
+const text=btn.innerText;
+
+if(text.includes("Сменить противника"))
+changeItem("shuffle");
+
+if(text.includes("Поиск Топ-20"))
+changeItem("top20");
+
+},true);
 
 
-el.addEventListener(
-"mousedown",
-start
-);
+const oldSend=XMLHttpRequest.prototype.send;
+
+XMLHttpRequest.prototype.send=function(body){
+
+if(typeof body==="string"&&body.includes("action=fight")){
+changeItem("fight");
+}
+
+return oldSend.apply(this,arguments);
+};
 
 
-el.addEventListener(
-"touchstart",
-start,
-{
-passive:false
+let timer;
+
+new MutationObserver(()=>{
+clearTimeout(timer);
+timer=setTimeout(scanRaidStats,300);
+}).observe(document.body,{
+childList:true,
+subtree:true
 });
-
-
-}
-
-
-
-
-
-// ==========================
-// Кнопки
-// ==========================
-
-document.addEventListener(
-"click",
-function(e){
-
-
-const btn =
-e.target.closest(
-".worldtour__button-small"
-);
-
-
-
-if(!btn)
-return;
-
-
-
-const text =
-btn.innerText;
-
-
-
-if(
-text.includes(
-"Сменить противника"
-)
-){
-
-changeItem(
-"shuffle"
-);
-
-
-}
-
-
-
-if(
-text.includes(
-"Поиск Топ-20"
-)
-){
-
-changeItem(
-"top20"
-);
-
-
-}
-
-
-},
-true);
-
-
-
-
-
-
-// ==========================
-// Fight
-// ==========================
-
-const oldOpen =
-XMLHttpRequest.prototype.open;
-
-
-const oldSend =
-XMLHttpRequest.prototype.send;
-
-
-
-XMLHttpRequest.prototype.open =
-function(method,url){
-
-this.mw_url=url;
-
-return oldOpen.apply(
-this,
-arguments
-);
-
-};
-
-
-
-XMLHttpRequest.prototype.send =
-function(body){
-
-
-if(
-typeof body==="string"
-&&
-body.includes(
-"action=fight"
-)
-){
-
-changeItem(
-"fight"
-);
-
-
-}
-
-
-
-return oldSend.apply(
-this,
-arguments
-);
-
-
-};
-
-
-
 
 
 loadItems();
-
-
+scanRaidStats();
 
 })();
