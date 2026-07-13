@@ -4582,7 +4582,7 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
         }
         console.log("[PVP] Handle group fight."),
           await z(G.roar),
-          await z(G.secondSelf),
+          await z(G.roar),
           await z(G.krovotok),
           await z(G.vampirism),
           await z(G.topot),
