@@ -17,8 +17,13 @@ const ITEMS=[
 {st:"8799",name:"fight",cost:15}
 ];
 
-let itemsData=[];
-let raidInfo={win:"-",max:"-",hype:"-",totals:"-"};
+let itemsData=[];let raidInfo={
+win:"-",
+max:"-",
+hype:"-",
+totals:"-",
+cool:"-"
+};
 
 async function loadItems(){
 try{
@@ -79,11 +84,25 @@ const win=text.match(/Сейчас за победу.*?получить до\s+(
 const max=text.match(/Теоретический максимум за эту страну:\s*(\d+)/);
 const hype=text.match(/Коэффициент за ажиотаж.*?(\d+)%/s);
 const totals=document.querySelector("#pvp-totals");
+    const boss=document.querySelector(".worldtour__enemy--boss");
+
+let coolValue = null;
+
+if (boss && boss.title) {
+    const match = boss.title.match(/Крутость:.*?}([\d.]+[BMK])/);
+
+    if (match) {
+        coolValue = match[1];
+    }
+}
 
 if(win)raidInfo.win=win[1];
 if(max)raidInfo.max=max[1];
 if(hype)raidInfo.hype=hype[1]+"%";
 if(totals)raidInfo.totals=totals.innerText.trim();
+    if(coolValue) {
+    raidInfo.cool = coolValue;
+}
 
 updateRaidBlock();
 }
@@ -121,6 +140,7 @@ margin-bottom:8px;
 line-height:1.4;">
 ${raidInfo.win} / ${raidInfo.max}<br>
 🔥 ${raidInfo.hype}<br>
+⚔️ ${raidInfo.cool}<br>
 ${raidInfo.totals}
 </div>
 
@@ -141,10 +161,10 @@ if(!el)return;
 el.innerHTML=`
 ${raidInfo.win} / ${raidInfo.max}<br>
 🔥 ${raidInfo.hype}<br>
+⚔️ ${raidInfo.cool}<br>
 ${raidInfo.totals}
 `;
 }
-
 function updateItems(){
 const el=document.querySelector("#mw-items");
 if(!el)return;
