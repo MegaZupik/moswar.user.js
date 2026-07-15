@@ -36,16 +36,16 @@
     let actionIndex = Number(
         sessionStorage.getItem("moswar_action_index") || 0
     );
-function getFightId() {
+/*function getFightId() {
 
-    const match = window.location.pathname.match(/fight\/(\d+)/);
+     const match = window.location.pathname.match(/fight\/(\d+)/);
 
     if (match) {
         return match[1];
     }
 
     return window.location.pathname;
-}
+} */
 
 function getFightId() {
 
@@ -141,23 +141,48 @@ function checkNewFight() {
 
 
 
-    async function useFightItem(imageSrc) {
+async function useFightItem(imageSrc) {
+
+    const img = document.querySelector(
+        `img[src="${imageSrc}"]`
+    );
 
 
-        const img = document.querySelector(
-            `img[src="${imageSrc}"]`
+    if (!img) {
+
+        console.log(
+            "[ITEM] Не найден:",
+            imageSrc,
+            "Делаем обычную атаку"
         );
 
 
-        if (!img) {
+        const button = document.querySelector(
+            "#fight-button-text"
+        );
+
+
+        if (button) {
+
+            button.click();
+
 
             console.log(
-                "[ITEM] Не найден:",
-                imageSrc
+                "[AUTO] Обычная атака выполнена"
             );
 
-            return false;
+
+            return true;
         }
+
+
+        console.log(
+            "[AUTO] Кнопка атаки не найдена"
+        );
+
+
+        return false;
+    }
 
 
 
@@ -258,6 +283,7 @@ await sleep(2000);
 
 
     async function makeTurn() {
+    checkNewFight();
 
 
         if (turnProcessing) {
