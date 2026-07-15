@@ -27,8 +27,10 @@
         //490  // Травлика электроволги
     ];
 
-
-    const NUT_IMAGE = "/@/images/obj/gifts2026/coconut.png";
+const HP_ITEMS = [
+    "/@/images/obj/gifts2026/coconut.png", // Орех
+    "/@/images/obj/gifts2026/durian.png"   // Дуриан
+];
 
 
     let turnProcessing = false;
@@ -243,23 +245,42 @@ await sleep(2000);
     }
 
 
+async function useNut() {
 
-    async function useNut() {
+    console.log(
+        "[AUTO] HP низкое, ищем хилку"
+    );
 
 
-        console.log(
-            "[AUTO] Используем орех по HP"
+    for (const item of HP_ITEMS) {
+
+        const img = document.querySelector(
+            `img[src="${item}"]`
         );
 
 
-        const result = await useFightItem(
-            NUT_IMAGE
-        );
+        if (img) {
+
+            console.log(
+                "[AUTO] Найден предмет:",
+                item
+            );
 
 
-        return result;
+            return await useFightItem(item);
+
+        }
 
     }
+
+
+    console.log(
+        "[AUTO] Нет ни ореха, ни дуриана"
+    );
+
+
+    return false;
+}
         function getMyHPPercent() {
 
         const hp = document.querySelector(
