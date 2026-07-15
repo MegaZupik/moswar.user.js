@@ -1,0 +1,497 @@
+// ==UserScript==
+// @name         MosWar Fight Auto v2
+// @namespace    https://www.moswar.ru/
+// @version      2.0
+// @description  Авто бой: способности, предметы, орех по HP
+// @match        https://www.moswar.ru/*
+// @grant        none
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+
+    const ACTIONS = [
+        -310, // Рык
+        -310, // Рык
+        "/@/images/obj/helmet_mf1.png", // Шлем
+        -313, // Кровоток
+        "/@/images/obj/gifts2026/cheese.png", // Сыр
+        540,  // Вампиризм
+        "/@/images/obj/dung_prize/duck.png", // Утка
+        -311, // Топот
+        543,  // Массовый
+        541,  // Неуязвимость
+        435   // Великий
+    ];
+
+
+    const NUT_IMAGE = "/@/images/obj/gifts2026/coconut.png";
+
+
+    let turnProcessing = false;
+
+
+    let actionIndex = Number(
+        sessionStorage.getItem("moswar_action_index") || 0
+    );
+function getFightId() {
+
+    const match = window.location.pathname.match(/fight\/(\d+)/);
+
+    if (match) {
+        return match[1];
+    }
+
+    return window.location.pathname;
+}
+
+function getFightId() {
+
+    const match = window.location.href.match(/fight\/(\d+)/);
+
+    return match ? match[1] : null;
+}
+
+
+function checkNewFight() {
+
+    const newFightId = getFightId();
+
+    const oldFightId = sessionStorage.getItem(
+        "moswar_fight_id"
+    );
+
+
+    if (!newFightId) {
+        return;
+    }
+
+
+    if (oldFightId !== newFightId) {
+
+        console.log(
+            "[AUTO] Новый бой:",
+            oldFightId,
+            "→",
+            newFightId,
+            "Сбрасываю очередь"
+        );
+
+
+        actionIndex = 0;
+
+
+        sessionStorage.setItem(
+            "moswar_action_index",
+            0
+        );
+
+
+        sessionStorage.setItem(
+            "moswar_fight_id",
+            newFightId
+        );
+    }
+}
+
+
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+
+
+    function saveActionIndex() {
+
+        sessionStorage.setItem(
+            "moswar_action_index",
+            actionIndex
+        );
+
+    }
+
+
+
+    async function useAbility(abilityId) {
+
+        console.log(
+            "[AUTO] Используем способность:",
+            abilityId
+        );
+
+
+        await fetch(
+            new URL(window.location.href).origin + "/fight/",
+            {
+                headers: {
+                    "content-type":
+                    "application/x-www-form-urlencoded; charset=UTF-8"
+                },
+                body:
+                `action=useabl&json=1&target=${abilityId}`,
+                method: "POST",
+                credentials: "include"
+            }
+        );
+
+    }
+
+
+
+    async function useFightItem(imageSrc) {
+
+
+        const img = document.querySelector(
+            `img[src="${imageSrc}"]`
+        );
+
+
+        if (!img) {
+
+            console.log(
+                "[ITEM] Не найден:",
+                imageSrc
+            );
+
+            return false;
+        }
+
+
+
+        const label = img.closest("label");
+
+
+
+        if (!label) {
+
+            console.log(
+                "[ITEM] Label не найден"
+            );
+
+            return false;
+        }
+
+
+
+        const radio = label.querySelector(
+            'input[type="radio"]'
+        );
+
+
+
+        if (!radio) {
+
+            console.log(
+                "[ITEM] Radio не найден"
+            );
+
+            return false;
+        }
+
+
+await sleep(2000);
+        radio.click();
+
+
+
+        console.log(
+            "[ITEM] Выбран:",
+            imageSrc
+        );
+
+
+
+        await sleep(500);
+
+
+
+        groupFightMakeStep();
+
+
+
+        return true;
+
+    }
+
+
+
+    async function useNut() {
+
+
+        console.log(
+            "[AUTO] Используем орех по HP"
+        );
+
+
+        const result = await useFightItem(
+            NUT_IMAGE
+        );
+
+
+        return result;
+
+    }
+        function getMyHPPercent() {
+
+        const hp = document.querySelector(
+            "li.me.alive .life .bar .percent"
+        );
+
+
+        if (!hp) {
+
+            console.log(
+                "[HP] Не найдена моя полоска HP"
+            );
+
+            return null;
+        }
+
+
+        return parseInt(hp.style.width) || 0;
+    }
+
+
+
+
+    async function makeTurn() {
+
+
+        if (turnProcessing) {
+
+            console.log(
+                "[AUTO] Ход уже выполняется"
+            );
+
+            return;
+        }
+
+
+
+        turnProcessing = true;
+
+
+
+        console.log(
+            "[AUTO] Проверка хода"
+        );
+
+
+
+        const hp = getMyHPPercent();
+
+
+
+        if (hp === null) {
+
+            console.log(
+                "[AUTO] HP нет, завершаем"
+            );
+
+            turnProcessing = false;
+
+            return;
+        }
+
+
+
+        console.log(
+            "[HP]",
+            hp + "%"
+        );
+
+
+
+        // Орех всегда вне очереди
+        if (hp < 60) {
+
+
+            console.log(
+                "[AUTO] HP меньше 60%, используем орех"
+            );
+
+
+
+            const nutUsed = await useNut();
+
+
+
+            if (nutUsed) {
+
+                console.log(
+                    "[AUTO] Ход с орехом выполнен"
+                );
+
+                turnProcessing = false;
+
+                return;
+            }
+
+        }
+
+
+
+        if (actionIndex >= ACTIONS.length) {
+
+
+            console.log(
+                "[AUTO] Очередь действий закончена"
+            );
+
+
+            turnProcessing = false;
+
+            return;
+
+        }
+
+
+
+
+        const action = ACTIONS[actionIndex];
+
+
+
+        console.log(
+            "[AUTO] Следующее действие:",
+            action
+        );
+
+
+
+        let success = false;
+
+
+
+        if (typeof action === "number") {
+
+    await useAbility(action);
+
+    await sleep(2000);
+
+    groupFightMakeStep();
+
+    success = true;
+
+} else if (typeof action === "string") {
+
+
+            success = await useFightItem(action);
+
+        }
+
+
+
+
+        if (success) {
+
+    actionIndex++;
+
+    saveActionIndex();
+
+    console.log(
+        "[AUTO] Индекс сохранён:",
+        actionIndex
+    );
+
+    turnProcessing = false;
+
+    return;
+}
+
+
+        console.log(
+            "[AUTO] Действие не выполнено"
+        );
+
+
+
+        turnProcessing = false;
+
+    }
+
+
+
+
+
+
+    function watchMyTurn() {
+        checkNewFight();
+
+
+        const observer = new MutationObserver(() => {
+
+
+
+            if (turnProcessing) {
+
+                return;
+
+            }
+
+
+
+            const button = document.querySelector(
+                "#fight-button-text"
+            );
+
+
+
+            if (!button) {
+
+                return;
+
+            }
+
+
+
+            const waiting = document.querySelector(
+                "#fightAction .waiting"
+            );
+
+
+
+            if (waiting &&
+                waiting.style.display !== "none") {
+
+                return;
+
+            }
+
+
+
+            makeTurn();
+
+
+
+        });
+
+
+
+        observer.observe(
+            document.body,
+            {
+                childList: true,
+                subtree: true
+            }
+        );
+
+
+
+        console.log(
+            "[AUTO] Автобой запущен"
+        );
+
+    }
+
+
+
+
+    watchMyTurn();
+
+
+
+})();
