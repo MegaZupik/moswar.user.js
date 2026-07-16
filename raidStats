@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MosWar Primary Pass Counter + Raid Stats
 // @namespace    http://tampermonkey.net/
-// @version      5.3
+// @version      5.4
 // @description  Счетчик предметов MosWar с рейд статистикой
 // @match        https://www.moswar.ru/*
 // @grant        none
@@ -108,7 +108,8 @@ if(totals)raidInfo.totals=totals.innerText.trim();
     raidInfo.cool = coolValue;
 }
 
-updateRaidBlock();
+  render();
+
 }
 
 function render(){
