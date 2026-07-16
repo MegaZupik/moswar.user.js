@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MosWar Primary Pass Counter + Raid Stats
 // @namespace    http://tampermonkey.net/
-// @version      5.2
+// @version      5.3
 // @description  Счетчик предметов MosWar с рейд статистикой
 // @match        https://www.moswar.ru/*
 // @grant        none
@@ -17,10 +17,12 @@ const ITEMS=[
 {st:"8799",name:"fight",cost:15}
 ];
 
-let itemsData=[];let raidInfo={
+let itemsData=[];
+let raidInfo={
 win:"-",
 max:"-",
 hype:"-",
+repeat:"-",
 totals:"-",
 cool:"-"
 };
@@ -83,6 +85,7 @@ const text=box.innerText;
 const win=text.match(/Сейчас за победу.*?получить до\s+(\d+)/s);
 const max=text.match(/Теоретический максимум за эту страну:\s*(\d+)/);
 const hype=text.match(/Коэффициент за ажиотаж.*?(\d+)%/s);
+    const repeat=text.match(/Коэффициент за повторы.*?(\d+)%/s);
 const totals=document.querySelector("#pvp-totals");
     const boss=document.querySelector(".worldtour__enemy--boss");
 
@@ -99,6 +102,7 @@ if (boss && boss.title) {
 if(win)raidInfo.win=win[1];
 if(max)raidInfo.max=max[1];
 if(hype)raidInfo.hype=hype[1]+"%";
+    if(repeat)raidInfo.repeat=repeat[1]+"%";
 if(totals)raidInfo.totals=totals.innerText.trim();
     if(coolValue) {
     raidInfo.cool = coolValue;
@@ -130,6 +134,19 @@ restorePosition(box);
 makeDraggable(box);
 }
 
+
+    const percent = raidInfo.max !== "-" ? Number(raidInfo.win) / Number(raidInfo.max) : 0;
+
+let winColor = "white";
+
+if (percent >= 0.95) {
+    winColor = "red";
+} else if (percent >= 0.90) {
+    winColor = "lime";
+}
+
+
+
 box.innerHTML=`
 <div id="mw-raid-stats" style="
 color:white;
@@ -138,9 +155,18 @@ font-size:18px;
 font-weight:bold;
 margin-bottom:8px;
 line-height:1.4;">
-${raidInfo.win} / ${raidInfo.max}<br>
+
+<span style="
+font-size:144%;
+font-weight:bold;
+color:${winColor};
+">
+${raidInfo.win} / ${raidInfo.max}
+</span><br>
+
 🔥 ${raidInfo.hype}<br>
 ⚔️ ${raidInfo.cool}<br>
+🔁 ${raidInfo.repeat}<br>
 ${raidInfo.totals}
 </div>
 
@@ -152,18 +178,6 @@ ${itemsData.map(i=>`
 </div>
 `).join("")}
 </div>`;
-}
-
-function updateRaidBlock(){
-const el=document.querySelector("#mw-raid-stats");
-if(!el)return;
-
-el.innerHTML=`
-${raidInfo.win} / ${raidInfo.max}<br>
-🔥 ${raidInfo.hype}<br>
-⚔️ ${raidInfo.cool}<br>
-${raidInfo.totals}
-`;
 }
 function updateItems(){
 const el=document.querySelector("#mw-items");
