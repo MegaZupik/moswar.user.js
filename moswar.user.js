@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.5
+// @version        8.4
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -4566,6 +4566,7 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
         ],
       },
       G = {
+        x2NPC: 358,
         roar: -310,
         topot: -311,
         krovotok: -313,
@@ -4618,9 +4619,11 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
 
         console.log("[PVP] Handle group fight.");
 
-/*         await throwDuck(),  //Бросок гранаты уточки (утки утка)
+/*      await z(x2NPC),
         await throwDuck(),  //Бросок гранаты уточки (утки утка)
-        await throwDuck(),  //Бросок гранаты уточки (утки утка) */
+        await throwDuck(),  //Бросок гранаты уточки (утки утка)
+        await throwDuck(),  //Бросок гранаты уточки (утки утка)
+        */
         await z(G.roar),
         await z(G.secondSelf),
         await z(G.krovotok),
