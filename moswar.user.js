@@ -2337,6 +2337,23 @@ initBatchAlertCloser();
     var Yt = Object.getOwnPropertyDescriptor;
     var Zt = Object.getOwnPropertyNames;
     var Qt = Object.prototype.hasOwnProperty;
+      // Функция для поиска ID предмета по названию картинки в инвентаре боя
+// Функция для поиска ID предмета по названию картинки в инвентаре боя
+// Функция для поиска ID предмета по названию картинки в инвентаре боя
+function findItemByImage(imageName) {
+    // Ищем все предметы в панели действий боя (исправленный селектор)
+    // Пробуем найти и в .fight-slots, и в #fight-actions для совместимости
+    let items = document.querySelectorAll('.fight-slots label img, #fight-actions label img');
+
+    for (let img of items) {
+        let src = img.getAttribute('src') || "";
+        // Проверяем, заканчивается ли путь на имя картинки (игнорируя регистр)
+        if (src.toLowerCase().endsWith(imageName.toLowerCase())) {
+            return img.getAttribute('data-id');
+        }
+    }
+    return null;
+}
     var en = (e, t) => {
         for (var n in t) ke(e, n, { get: t[n], enumerable: !0 });
       },
@@ -4558,33 +4575,55 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
     async function Tt() {
       $(document).one("ajaxStop", P), Worldtour2.startFight(), await At(2);
     }
-async function P(e = !1) {
+
+
+
+
+      async function P(e = !1) {
     if (AngryAjax.getCurrentUrl().includes("fight")) {
-        // Проверка, что это наш ход
         if (!$(".block-rounded").children().first().hasClass("current")) {
-            showAlert(
-                "\u041e\u0448\u0438\u0431\u043a\u0430",
-                "\u041f\u0435\u0440\u0435\u0439\u0434\u0438\u0442\u0435 \u043d\u0430 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0445\u043e\u0434!"
-            );
+            showAlert("\u041e\u0448\u0438\u0431\u043a\u0430", "\u041f\u0435\u0440\u0435\u0439\u0434\u0438\u0442\u0435 \u043d\u0430 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0445\u043e\u0434!");
             return;
         }
-        // Проверка, что бой не закончен
-        if (
-            $(
-                "#fightGroupForm > table > tbody > tr > td.log > ul > li:nth-child(1) > div.result"
-            ).length > 0
-        ) {
-            showAlert(
-                "\u041e\u0448\u0438\u0431\u043a\u0430",
-                "\u0411\u043e\u0439 \u0443\u0436\u0435 \u0437\u0430\u043a\u043e\u043d\u0447\u0435\u043d."
-            );
+        if ($("#fightGroupForm > table > tbody > tr > td.log > ul > li:nth-child(1) > div.result").length > 0) {
+            showAlert("\u041e\u0448\u0438\u0431\u043a\u0430", "\u0411\u043e\u0439 \u0443\u0436\u0435 \u0437\u0430\u043a\u043e\u043d\u0447\u0435\u043d.");
             return;
         }
-        console.log("[PVP] Handle group fight."),
-        // Первая способность: Рык (-310)
+
+        console.log("[PVP] Handle group fight.");
+
+        // --- НАЧАЛО ИЗМЕНЕНИЙ: 3 броска Утки ---
+        let duckId = findItemByImage("duck.png");
+        if (duckId) {
+            console.log(`[AUTO] Found Duck with ID: ${duckId}. Throwing 3 times...`);
+
+            for (let i = 0; i < 3; i++) {
+                console.log(`[AUTO] Throw #${i + 1}`);
+
+                // Прямой запрос броска гранаты
+                let fightUrl = window.location.href;
+                let referrerPath = new URL(fightUrl).pathname;
+
+                await fetch(new URL(window.location.href).origin + "/fight/", {
+                    headers: {
+                        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+                        "x-requested-with": "XMLHttpRequest"
+                    },
+                    body: `action=useitem&json=1&target=${duckId}&__referrer=${encodeURIComponent(referrerPath)}&return_url=${encodeURIComponent(referrerPath)}`,
+                    method: "POST",
+                    credentials: "include"
+                });
+
+                // Пауза 0.3 секунды между бросками
+                await At(0.3);
+            }
+        } else {
+            console.log("[AUTO] Duck not found in fight actions.");
+        }
+        // --- КОНЕЦ ИЗМЕНЕНИЙ ---
+
         await z(G.roar),
-        // Вторая способность: СНОВА Рык (-310) вместо Второго Я (363)
-        await z(G.roar),
+        await z(G.secondSelf),
         await z(G.krovotok),
         await z(G.vampirism),
         await z(G.topot),
@@ -4602,6 +4641,8 @@ async function P(e = !1) {
         });
     }
 }
+
+
     async function An(e = 10) {
       if (AngryAjax.getCurrentUrl().includes("fight"))
         for (let t = 0; t < e; t++) {
@@ -6360,7 +6401,7 @@ async function P(e = !1) {
         let r = $(`
       <span></span>
     `);
-        
+
           $(
             '.object-thumbs[htab="inventory"] img[src="/@/images/obj/phones/siri_64.png"]'
           )
