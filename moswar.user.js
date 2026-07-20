@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.4
+// @version        8.5
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -2340,19 +2340,45 @@ initBatchAlertCloser();
       // Функция для поиска ID предмета по названию картинки в инвентаре боя
 // Функция для поиска ID предмета по названию картинки в инвентаре боя
 // Функция для поиска ID предмета по названию картинки в инвентаре боя
+// Функция для поиска ID предмета по названию картинки
 function findItemByImage(imageName) {
-    // Ищем все предметы в панели действий боя (исправленный селектор)
-    // Пробуем найти и в .fight-slots, и в #fight-actions для совместимости
     let items = document.querySelectorAll('.fight-slots label img, #fight-actions label img');
-
     for (let img of items) {
         let src = img.getAttribute('src') || "";
-        // Проверяем, заканчивается ли путь на имя картинки (игнорируя регистр)
         if (src.toLowerCase().endsWith(imageName.toLowerCase())) {
             return img.getAttribute('data-id');
         }
     }
     return null;
+}
+
+// Отдельная функция для броска утки (или любого другого предмета)
+async function throwDuck() {
+    let duckId = findItemByImage("duck.png");
+    if (duckId) {
+        console.log(`[AUTO] Found Duck with ID: ${duckId}. Throwing it...`);
+
+        // Прямой запрос броска гранаты, как ты просил
+        let fightUrl = window.location.href;
+        let referrerPath = new URL(fightUrl).pathname;
+
+        await fetch(new URL(window.location.href).origin + "/fight/", {
+            headers: {
+                "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "x-requested-with": "XMLHttpRequest"
+            },
+            body: `action=useitem&json=1&target=${duckId}&__referrer=${encodeURIComponent(referrerPath)}&return_url=${encodeURIComponent(referrerPath)}`,
+            method: "POST",
+            credentials: "include"
+        });
+
+        // Пауза чтобы сервер успел обработать
+        await At(0.3);
+        return true;
+    } else {
+        console.log("[AUTO] Duck not found in fight actions.");
+        return false;
+    }
 }
     var en = (e, t) => {
         for (var n in t) ke(e, n, { get: t[n], enumerable: !0 });
@@ -4592,36 +4618,9 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
 
         console.log("[PVP] Handle group fight.");
 
-        // --- НАЧАЛО ИЗМЕНЕНИЙ: 3 броска Утки ---
-        let duckId = findItemByImage("duck.png");
-        if (duckId) {
-            console.log(`[AUTO] Found Duck with ID: ${duckId}. Throwing 3 times...`);
-
-            for (let i = 0; i < 3; i++) {
-                console.log(`[AUTO] Throw #${i + 1}`);
-
-                // Прямой запрос броска гранаты
-                let fightUrl = window.location.href;
-                let referrerPath = new URL(fightUrl).pathname;
-
-                await fetch(new URL(window.location.href).origin + "/fight/", {
-                    headers: {
-                        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-                        "x-requested-with": "XMLHttpRequest"
-                    },
-                    body: `action=useitem&json=1&target=${duckId}&__referrer=${encodeURIComponent(referrerPath)}&return_url=${encodeURIComponent(referrerPath)}`,
-                    method: "POST",
-                    credentials: "include"
-                });
-
-                // Пауза 0.3 секунды между бросками
-                await At(0.3);
-            }
-        } else {
-            console.log("[AUTO] Duck not found in fight actions.");
-        }
-        // --- КОНЕЦ ИЗМЕНЕНИЙ ---
-
+/*         await throwDuck(),  //Бросок гранаты уточки (утки утка)
+        await throwDuck(),  //Бросок гранаты уточки (утки утка)
+        await throwDuck(),  //Бросок гранаты уточки (утки утка) */
         await z(G.roar),
         await z(G.secondSelf),
         await z(G.krovotok),
