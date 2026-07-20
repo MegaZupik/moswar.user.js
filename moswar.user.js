@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.6
+// @version        8.4
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -17,8 +17,6 @@
 
 //добавление иинформации о ракете ------------
 (function(){'use strict';const ITEM_REL='10874',TEXT=' и добавь +1 предмет в слоты!';function addText(){let item=document.querySelector('li.object[rel="'+ITEM_REL+'"]');if(!item)return;let characteristics=item.querySelector('.characteristics');if(!characteristics)return;characteristics.style.height='57px';let textBlock=characteristics.querySelector('div');if(!textBlock||textBlock.dataset.added)return;textBlock.appendChild(document.createTextNode(TEXT));textBlock.dataset.added='1'}addText();new MutationObserver(addText).observe(document.body,{childList:true,subtree:true})})();
-
-
 //--------------------- обмен сири кнопка -----------------------
 
 
@@ -4560,46 +4558,50 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
     async function Tt() {
       $(document).one("ajaxStop", P), Worldtour2.startFight(), await At(2);
     }
-    async function P(e = !1) {
-      if (AngryAjax.getCurrentUrl().includes("fight")) {
+async function P(e = !1) {
+    if (AngryAjax.getCurrentUrl().includes("fight")) {
+        // Проверка, что это наш ход
         if (!$(".block-rounded").children().first().hasClass("current")) {
-          showAlert(
-            "\u041E\u0448\u0438\u0431\u043A\u0430",
-            "\u041F\u0435\u0440\u0435\u0439\u0434\u0438\u0442\u0435 \u043D\u0430 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0445\u043E\u0434!"
-          );
-          return;
+            showAlert(
+                "\u041e\u0448\u0438\u0431\u043a\u0430",
+                "\u041f\u0435\u0440\u0435\u0439\u0434\u0438\u0442\u0435 \u043d\u0430 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0445\u043e\u0434!"
+            );
+            return;
         }
+        // Проверка, что бой не закончен
         if (
-          $(
-            "#fightGroupForm > table > tbody > tr > td.log > ul > li:nth-child(1) > div.result"
-          ).length > 0
+            $(
+                "#fightGroupForm > table > tbody > tr > td.log > ul > li:nth-child(1) > div.result"
+            ).length > 0
         ) {
-          showAlert(
-            "\u041E\u0448\u0438\u0431\u043A\u0430",
-            "\u0411\u043E\u0439 \u0443\u0436\u0435 \u0437\u0430\u043A\u043E\u043D\u0447\u0435\u043D."
-          );
-          return;
+            showAlert(
+                "\u041e\u0448\u0438\u0431\u043a\u0430",
+                "\u0411\u043e\u0439 \u0443\u0436\u0435 \u0437\u0430\u043a\u043e\u043d\u0447\u0435\u043d."
+            );
+            return;
         }
         console.log("[PVP] Handle group fight."),
-          await z(G.roar),
-          await z(G.roar),
-          await z(G.krovotok),
-          await z(G.vampirism),
-          await z(G.topot),
-          await z(G.mass),
-          await z(G.invincible),
-          await An(10),
-          console.log("[PVP] Group fight handler finished execution."),
-          $(document).one("ajaxStop", () => {
+        // Первая способность: Рык (-310)
+        await z(G.roar),
+        // Вторая способность: СНОВА Рык (-310) вместо Второго Я (363)
+        await z(G.roar),
+        await z(G.krovotok),
+        await z(G.vampirism),
+        await z(G.topot),
+        await z(G.mass),
+        await z(G.invincible),
+        await An(10),
+        console.log("[PVP] Group fight handler finished execution."),
+        $(document).one("ajaxStop", () => {
             console.log("Finished fight"),
-              e &&
-                $(document).one(
-                  "ajaxStop",
-                  setTimeout(() => Worldtour2.startFight(), 1e3)
-                );
-          });
-      }
+            e &&
+            $(document).one(
+                "ajaxStop",
+                setTimeout(() => Worldtour2.startFight(), 1e3)
+            );
+        });
     }
+}
     async function An(e = 10) {
       if (AngryAjax.getCurrentUrl().includes("fight"))
         for (let t = 0; t < e; t++) {
