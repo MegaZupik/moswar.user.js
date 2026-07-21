@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.4
+// @version        8.6
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -1189,70 +1189,84 @@ function groupFightMakeStep()
     // =====================================
 
 
-    const pokemonBtn = document.createElement('div');
+    // =====================================
+// КНОПКА POKEMON
+// =====================================
+
+const pokemonBtn = document.createElement('div');
+
+pokemonBtn.id = 'mw-pokemon-btn';
 
 
-    pokemonBtn.id = 'mw-pokemon-btn';
+// картинка покемона
+pokemonBtn.innerHTML = `
+    <img src="/@/images/obj/gifts2016/pokemon/pika.png"
+         style="
+            width:64px;
+            height:64px;
+            pointer-events:none;
+         ">
+`;
 
 
-    pokemonBtn.textContent =
-        'Тренировка\nпокемона';
+
+pokemonBtn.style.cssText = `
+
+    position:fixed;
+
+
+    left:${localStorage.getItem('mw-pokemon-x') ?? 20}px;
+
+    top:${localStorage.getItem('mw-pokemon-y') ?? 100}px;
 
 
 
-    pokemonBtn.style.cssText = `
+    width:80px;
 
-        position:fixed;
-
-        left:${localStorage.getItem('mw-pokemon-x') ?? 20}px;
-        top:${localStorage.getItem('mw-pokemon-y') ?? 100}px;
+    height:80px;
 
 
-        width:150px;
-        height:100px;
+
+    background:#333;
 
 
-        background:#1976d2;
 
-        color:white;
+    display:flex;
 
+    align-items:center;
 
-        font-size:20px;
-
-        font-weight:bold;
+    justify-content:center;
 
 
-        display:flex;
 
-        align-items:center;
+    border:3px solid #888;
 
-        justify-content:center;
-
-
-        text-align:center;
-
-        white-space:pre-line;
+    border-radius:12px;
 
 
-        border:2px solid black;
 
-        border-radius:10px;
-
-
-        cursor:grab;
+    cursor:grab;
 
 
-        user-select:none;
+    user-select:none;
 
-        touch-action:none;
-
-
-        z-index:2147483647;
+    touch-action:none;
 
 
-        box-sizing:border-box;
 
-    `;
+    z-index:2147483647;
+
+
+
+    box-sizing:border-box;
+
+
+
+    box-shadow:
+        0 0 5px black,
+        inset 0 0 8px #555;
+
+`;
 
 
 
@@ -1287,23 +1301,84 @@ function groupFightMakeStep()
         for (let i = 1; i <= 50; i++) {
 
 
-            $.post(
-                '/pokemon/',
-                {
-                    action:'train-pokemon'
-                },
-                'post',
-                1
-            );
+    $.post(
+        '/pokemon/',
+        {
+            action:'train-pokemon'
+        },
+        'post',
+        1
+    );
+
+
+    await new Promise(r =>
+        setTimeout(r,30)
+    );
+
+
+}
+
+
+// =====================================
+// Сообщение после тренировки
+// =====================================
+
+const msg = document.createElement('div');
+
+msg.textContent = 'Тренировка завершена';
+
+
+msg.style.cssText = `
+
+    position:fixed;
+
+    left:50%;
+
+    top:50%;
+
+    transform:translate(-50%,-50%);
+
+
+    background:#009900;
+
+    color:white;
+
+
+    padding:20px 40px;
+
+
+    font-size:28px;
+
+    font-weight:bold;
+
+
+    border:3px solid black;
+
+    border-radius:15px;
+
+
+    z-index:2147483647;
+
+
+    box-shadow:0 0 20px black;
+
+`;
+
+
+document.body.appendChild(msg);
 
 
 
-            await new Promise(r =>
-                setTimeout(r,30)
-            );
+setTimeout(()=>{
 
 
-        }
+    msg.remove();
+
+
+    location.reload();
+
+
+},1000);
 
 
     });
@@ -4619,11 +4694,11 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
 
         console.log("[PVP] Handle group fight.");
 
-/*      await z(x2NPC),
+/*      await z(x2NPC),*/
         await throwDuck(),  //Бросок гранаты уточки (утки утка)
         await throwDuck(),  //Бросок гранаты уточки (утки утка)
         await throwDuck(),  //Бросок гранаты уточки (утки утка)
-        */
+        
         await z(G.roar),
         await z(G.secondSelf),
         await z(G.krovotok),
