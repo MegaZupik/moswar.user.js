@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.9
+// @version        8.99
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -5017,6 +5017,7 @@ if(AUTO.duck)
     await throwDuck();
     await throwDuck();
 }
+        await z(G.roar),
         await z(G.roar),
         await z(G.secondSelf),
         await z(G.krovotok),
