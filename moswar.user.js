@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.8
+// @version        8.9
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -48,130 +48,99 @@ function createTravelButtons(){
 
     if(saved){
         let pos = JSON.parse(saved);
-        el.style.left = pos.left + 'px';
-        el.style.top = pos.top + 'px';
+        el.style.left = pos.left + "px";
+        el.style.top = pos.top + "px";
     }
 
+    let drag = false;
+    let moved = false;
 
-    let dragging = false;
+    let dx = 0;
+    let dy = 0;
 
     let startX = 0;
     let startY = 0;
 
-    let startLeft = 0;
-    let startTop = 0;
+    function start(x, y){
 
+        drag = true;
+        moved = false;
 
-    function stopDrag(){
+        startX = x;
+        startY = y;
 
-        if(!dragging)
+        dx = x - el.offsetLeft;
+        dy = y - el.offsetTop;
+    }
+
+    function move(x, y){
+
+        if(!drag)
             return;
 
-        dragging = false;
+        if(
+            Math.abs(x - startX) > 5 ||
+            Math.abs(y - startY) > 5
+        ){
+            moved = true;
+        }
 
-        let rect = el.getBoundingClientRect();
+        el.style.left = (x - dx) + "px";
+        el.style.top = (y - dy) + "px";
+    }
+
+    function end(){
+
+        if(!drag)
+            return;
+
+        drag = false;
 
         localStorage.setItem(
             key,
             JSON.stringify({
-                left: rect.left,
-                top: rect.top
+                left: el.offsetLeft,
+                top: el.offsetTop
             })
         );
     }
 
-
-    function move(e){
-
-        if(!dragging)
-            return;
-
+    // ПК
+    el.addEventListener("mousedown", e=>{
         e.preventDefault();
+        start(e.clientX, e.clientY);
+    });
 
-        let dx = e.clientX - startX;
-        let dy = e.clientY - startY;
+    document.addEventListener("mousemove", e=>{
+        move(e.clientX, e.clientY);
+    });
 
+    document.addEventListener("mouseup", end);
 
-        el.style.left = (startLeft + dx) + "px";
-        el.style.top  = (startTop + dy) + "px";
-    }
+    // Телефон
+    el.addEventListener("touchstart", e=>{
+        let t = e.touches[0];
+        start(t.clientX, t.clientY);
+    }, {passive:false});
 
+    document.addEventListener("touchmove", e=>{
+        if(!drag) return;
+        let t = e.touches[0];
+        move(t.clientX, t.clientY);
+        e.preventDefault();
+    }, {passive:false});
 
-    function up(){
+    document.addEventListener("touchend", end);
+    document.addEventListener("touchcancel", end);
 
-        document.removeEventListener(
-            "pointermove",
-            move,
-            {passive:false}
-        );
-
-        document.removeEventListener(
-            "pointerup",
-            up
-        );
-
-        document.removeEventListener(
-            "pointercancel",
-            up
-        );
-
-        stopDrag();
-    }
-
-
-    el.addEventListener(
-        "pointerdown",
-        function(e){
-
+    // Чтобы после перетаскивания не срабатывал клик
+    el.addEventListener("click", function(e){
+        if(moved){
             e.preventDefault();
-
-            dragging = true;
-
-            startX = e.clientX;
-            startY = e.clientY;
-
-
-            let rect = el.getBoundingClientRect();
-
-            startLeft = rect.left;
-            startTop = rect.top;
-
-
-            document.addEventListener(
-                "pointermove",
-                move,
-                {passive:false}
-            );
-
-
-            document.addEventListener(
-                "pointerup",
-                up
-            );
-
-
-            document.addEventListener(
-                "pointercancel",
-                up
-            );
-
-        },
-        {passive:false}
-    );
-
-
-    el.addEventListener(
-        "click",
-        function(e){
-
-            if(dragging){
-                e.preventDefault();
-                e.stopImmediatePropagation();
-            }
-
-        },
-        true
-    );
+            e.stopImmediatePropagation();
+            moved = false;
+        }
+    }, true);
 
 }
 
