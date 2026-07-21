@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.4
+// @version        8.7
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -299,8 +299,10 @@ function createTravelButtons(){
 
 
 
+    if(!localStorage.getItem('mw-duck-btn-pos')){
     duckBtn.style.left='20px';
     duckBtn.style.top='100px';
+}
 
 
 
@@ -330,8 +332,10 @@ function createTravelButtons(){
 
 
 
+    if(!localStorage.getItem('mw-fury-btn-pos')){
     furyBtn.style.left='110px';
     furyBtn.style.top='100px';
+}
 
 
 }
