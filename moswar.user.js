@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.7
+// @version        8.8
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -47,126 +47,131 @@ function createTravelButtons(){
     let saved = localStorage.getItem(key);
 
     if(saved){
-
         let pos = JSON.parse(saved);
-
         el.style.left = pos.left + 'px';
         el.style.top = pos.top + 'px';
-
     }
 
 
     let dragging = false;
 
-    let startX;
-    let startY;
+    let startX = 0;
+    let startY = 0;
 
-    let startLeft;
-    let startTop;
+    let startLeft = 0;
+    let startTop = 0;
 
 
-    el.addEventListener('pointerdown', function(e){
+    function stopDrag(){
 
-        e.preventDefault();
+        if(!dragging)
+            return;
 
         dragging = false;
 
-
-        startX = e.clientX;
-        startY = e.clientY;
-
-
         let rect = el.getBoundingClientRect();
 
-        startLeft = rect.left;
-        startTop = rect.top;
+        localStorage.setItem(
+            key,
+            JSON.stringify({
+                left: rect.left,
+                top: rect.top
+            })
+        );
+    }
 
 
-        el.setPointerCapture(e.pointerId);
+    function move(e){
+
+        if(!dragging)
+            return;
+
+        e.preventDefault();
+
+        let dx = e.clientX - startX;
+        let dy = e.clientY - startY;
 
 
-
-        function move(ev){
-
-            let dx = ev.clientX - startX;
-            let dy = ev.clientY - startY;
+        el.style.left = (startLeft + dx) + "px";
+        el.style.top  = (startTop + dy) + "px";
+    }
 
 
-            if(Math.abs(dx)>3 || Math.abs(dy)>3)
-                dragging = true;
+    function up(){
+
+        document.removeEventListener(
+            "pointermove",
+            move,
+            {passive:false}
+        );
+
+        document.removeEventListener(
+            "pointerup",
+            up
+        );
+
+        document.removeEventListener(
+            "pointercancel",
+            up
+        );
+
+        stopDrag();
+    }
 
 
-            el.style.left = (startLeft + dx) + 'px';
-            el.style.top  = (startTop + dy) + 'px';
+    el.addEventListener(
+        "pointerdown",
+        function(e){
 
-        }
+            e.preventDefault();
+
+            dragging = true;
+
+            startX = e.clientX;
+            startY = e.clientY;
 
 
+            let rect = el.getBoundingClientRect();
 
-        function up(){
+            startLeft = rect.left;
+            startTop = rect.top;
 
-            document.removeEventListener(
-                'pointermove',
-                move
+
+            document.addEventListener(
+                "pointermove",
+                move,
+                {passive:false}
             );
 
-            document.removeEventListener(
-                'pointerup',
+
+            document.addEventListener(
+                "pointerup",
                 up
             );
 
 
-            if(dragging){
+            document.addEventListener(
+                "pointercancel",
+                up
+            );
 
-                let rect = el.getBoundingClientRect();
+        },
+        {passive:false}
+    );
 
-                localStorage.setItem(
-                    key,
-                    JSON.stringify({
-                        left:rect.left,
-                        top:rect.top
-                    })
-                );
-
-            }
-
-
-        }
-
-
-        document.addEventListener(
-            'pointermove',
-            move
-        );
-
-
-        document.addEventListener(
-            'pointerup',
-            up
-        );
-
-
-    });
-
-
-
-    // чтобы после движения не сработало включение/выключение
 
     el.addEventListener(
-        'click',
+        "click",
         function(e){
 
             if(dragging){
-
                 e.preventDefault();
                 e.stopImmediatePropagation();
-
             }
 
         },
         true
     );
-
 
 }
 
