@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.6
+// @version        9.4
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,335 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+//Добавляю кнопки для уток и яростного инжектора в рейды
+  const AUTO = {
+    duck: localStorage.getItem('mw-duck') !== '0',
+    fury: localStorage.getItem('mw-fury') === '1'
+};
+
+
+function createTravelButtons(){
+
+
+    if(location.pathname !== '/travel2/'){
+
+        let duck = document.querySelector('#mw-duck-btn');
+        let fury = document.querySelector('#mw-fury-btn');
+
+        if(duck) duck.remove();
+        if(fury) fury.remove();
+
+        return;
+    }
+
+
+
+    if(document.querySelector('#mw-duck-btn'))
+        return;
+
+
+
+    function makeDraggable(el, key){
+
+    let saved = localStorage.getItem(key);
+
+    if(saved){
+
+        let pos = JSON.parse(saved);
+
+        el.style.left = pos.left + 'px';
+        el.style.top = pos.top + 'px';
+
+    }
+
+
+    let dragging = false;
+
+    let startX;
+    let startY;
+
+    let startLeft;
+    let startTop;
+
+
+    el.addEventListener('pointerdown', function(e){
+
+        e.preventDefault();
+
+        dragging = false;
+
+
+        startX = e.clientX;
+        startY = e.clientY;
+
+
+        let rect = el.getBoundingClientRect();
+
+        startLeft = rect.left;
+        startTop = rect.top;
+
+
+        el.setPointerCapture(e.pointerId);
+
+
+
+        function move(ev){
+
+            let dx = ev.clientX - startX;
+            let dy = ev.clientY - startY;
+
+
+            if(Math.abs(dx)>3 || Math.abs(dy)>3)
+                dragging = true;
+
+
+            el.style.left = (startLeft + dx) + 'px';
+            el.style.top  = (startTop + dy) + 'px';
+
+        }
+
+
+
+        function up(){
+
+            document.removeEventListener(
+                'pointermove',
+                move
+            );
+
+            document.removeEventListener(
+                'pointerup',
+                up
+            );
+
+
+            if(dragging){
+
+                let rect = el.getBoundingClientRect();
+
+                localStorage.setItem(
+                    key,
+                    JSON.stringify({
+                        left:rect.left,
+                        top:rect.top
+                    })
+                );
+
+            }
+
+
+        }
+
+
+        document.addEventListener(
+            'pointermove',
+            move
+        );
+
+
+        document.addEventListener(
+            'pointerup',
+            up
+        );
+
+
+    });
+
+
+
+    // чтобы после движения не сработало включение/выключение
+
+    el.addEventListener(
+        'click',
+        function(e){
+
+            if(dragging){
+
+                e.preventDefault();
+                e.stopImmediatePropagation();
+
+            }
+
+        },
+        true
+    );
+
+
+}
+
+    function makeBtn(id,img,storage,callback){
+
+
+        let btn=document.createElement('div');
+
+        btn.id=id;
+
+
+        btn.innerHTML=`
+            <img src="${img}"
+            style="
+            width:64px;
+            height:64px;
+            pointer-events:none;">
+            <span></span>
+        `;
+
+
+
+        btn.style.cssText=`
+
+            position:fixed;
+
+            width:80px;
+            height:80px;
+
+            background:#333;
+
+            border:3px solid #888;
+
+            border-radius:12px;
+
+            display:flex;
+
+            align-items:center;
+
+            justify-content:center;
+
+            cursor:pointer;
+
+            z-index:2147483647;
+
+            box-shadow:
+            0 0 5px black,
+            inset 0 0 8px #555;
+
+        `;
+
+
+
+        let span=btn.querySelector('span');
+
+        span.style.cssText=`
+
+            position:absolute;
+
+            bottom:2px;
+
+            right:4px;
+
+            font-size:16px;
+
+            font-weight:bold;
+
+            color:white;
+
+        `;
+
+
+
+        function update(){
+
+            let state=callback();
+
+            span.textContent=
+                state ? '' : 'OFF';
+
+        }
+
+
+
+        btn.onclick=()=>{
+
+            callback(true);
+
+            update();
+
+        };
+
+
+        update();
+
+
+        document.body.appendChild(btn);
+        makeDraggable(btn, id + '-pos');
+
+
+        return btn;
+
+    }
+
+
+
+
+
+
+    let duckBtn=makeBtn(
+        'mw-duck-btn',
+        '/@/images/obj/dung_prize/duck.png',
+        'mw-duck',
+        (click)=>{
+
+            if(click)
+            {
+                AUTO.duck=!AUTO.duck;
+
+                localStorage.setItem(
+                    'mw-duck',
+                    AUTO.duck?'1':'0'
+                );
+            }
+
+            return AUTO.duck;
+
+        }
+    );
+
+
+
+    duckBtn.style.left='20px';
+    duckBtn.style.top='100px';
+
+
+
+
+
+
+    let furyBtn=makeBtn(
+        'mw-fury-btn',
+        '/@/images/obj/../ico/ability/fury_2.png',
+        'mw-fury',
+        (click)=>{
+
+            if(click)
+            {
+                AUTO.fury=!AUTO.fury;
+
+                localStorage.setItem(
+                    'mw-fury',
+                    AUTO.fury?'1':'0'
+                );
+            }
+
+            return AUTO.fury;
+
+        }
+    );
+
+
+
+    furyBtn.style.left='110px';
+    furyBtn.style.top='100px';
+
+
+}
+
+
+
+setInterval(
+    createTravelButtons,
+    1000
+);
 
 
 //добавление иинформации о ракете ------------
@@ -4640,7 +4969,9 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
           "\u0447\u0435\u0448\u0438\u043D\u043E\u0433\u0430",
         ],
       },
+
       G = {
+
         x2NPC: 358,
         roar: -310,
         topot: -311,
@@ -4650,6 +4981,7 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
         invincible: 541,
         mass: 543,
       };
+
     async function kt() {
       AngryAjax.getCurrentUrl() !== "/travel2/" &&
         (console.log("[PVP] Not on Travel2 page. Navigating there..."),
@@ -4694,11 +5026,19 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
 
         console.log("[PVP] Handle group fight.");
 
-/*      await z(x2NPC),*/
-        await throwDuck(),  //Бросок гранаты уточки (утки утка)
-        await throwDuck(),  //Бросок гранаты уточки (утки утка)
-        await throwDuck(),  //Бросок гранаты уточки (утки утка)
-        
+if(AUTO.fury)
+{
+    await z(G.x2NPC);
+}
+
+
+
+if(AUTO.duck)
+{
+    await throwDuck();
+    await throwDuck();
+    await throwDuck();
+}
         await z(G.roar),
         await z(G.secondSelf),
         await z(G.krovotok),
