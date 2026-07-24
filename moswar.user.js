@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        8.99
+// @version        9.00
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,529 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+
+//// METRO RAT SEARCH НАЧАЛО
+(function () {
+    'use strict';
+
+    // ============================================================
+    //  КОНСТАНТЫ
+    // ============================================================
+
+    // Картинка награды, КОЛИЧЕСТВО которой сравниваем с порогом.
+    const REWARD_IMG = '/@/images/obj/bullets.png';
+
+    const MAX_LEVEL    = 40;    // последний спуск
+    const TRACK_DELAY  = 800;   // пауза после "Выследить" (даём прогрузиться награде)
+    const LEAVE_DELAY  = 1500;  // короткая пауза после "Убежать", без долгого ожидания кулдауна
+    const FIGHT_DELAY  = 1000;  // пауза после "Напасть" (бой стартует)
+    const ELEVATOR_DELAY = 800; // пауза после лифта Харони (перекат за жетоны) — на смену монстра
+    const POLL_STEP    = 150;   // шаг опроса DOM
+    const POLL_TIMEOUT = 9000;  // максимум ждать элемент
+    const FIGHT_STEPS  = 80;    // максимум итераций добивания боя
+    const SAME_LVL_STOP = 3;    // стоп, если уровень не растёт N раз подряд (проигрыши)
+
+    const LS_CFG = 'mw_ratsearch_cfg_v2';
+    const LS_RUN = 'mw_ratsearch_run_v2'; // флаг "поиск активен" (переживает reload)
+
+    // Диапазоны спусков → порог "≥": r1=1-9, r10=10-15, r16=16-20, r21=21-40
+    const DEFAULT_CFG = {
+        modeLabubu: false,   // Проходить с активной Лабубой
+        modeTokens: false,   // Проходить за жетоны (взаимоисключимо с Лабубой)
+        ranges: { r1: 0, r10: 0, r16: 0, r21: 0 }
+    };
+
+    // максимально допустимое значение награды по диапазонам (больше ввести нельзя)
+    const RANGE_MAX = { r1: 8, r10: 12, r16: 18, r21: 24 };
+
+    let cfg = loadCfg();
+    let isRunning = false;
+    let isMetroPage = false;
+    let observer = null;
+    let panelCollapsed = true;   // панель свёрнута по умолчанию на КАЖДОЙ загрузке (не сохраняем)
+
+    // ============================================================
+    //  ХРАНИЛИЩЕ
+    // ============================================================
+    function loadCfg() {
+        try { const raw = localStorage.getItem(LS_CFG); if (raw) return Object.assign({}, DEFAULT_CFG, JSON.parse(raw)); } catch (e) {}
+        return JSON.parse(JSON.stringify(DEFAULT_CFG));
+    }
+    function saveCfg() { try { localStorage.setItem(LS_CFG, JSON.stringify(cfg)); } catch (e) {} }
+    function setRunFlag(v) { try { v ? localStorage.setItem(LS_RUN, '1') : localStorage.removeItem(LS_RUN); } catch (e) {} }
+    function getRunFlag() { try { return localStorage.getItem(LS_RUN) === '1'; } catch (e) { return false; } }
+
+    function thresholdForLevel(L) {
+        if (L >= 21) return cfg.ranges.r21;
+        if (L >= 16) return cfg.ranges.r16;
+        if (L >= 10) return cfg.ranges.r10;
+        return cfg.ranges.r1; // 1-9
+    }
+
+    // ============================================================
+    //  ЧТЕНИЕ СОСТОЯНИЯ ИГРЫ
+    // ============================================================
+    function playerState() { try { return (typeof player !== 'undefined' && player) ? player.state : ''; } catch (e) { return ''; } }
+    function onMetro() { return /\/metro\/?$/.test(location.pathname); }
+    function onFightPage() { return /\/(alley\/)?fight\//.test(location.pathname); }
+    // активен ли пост-боевой кулдаун (надёжнее всего — таймер в заголовке вкладки "[00:XX:XX] Метро")
+    function metroCooldownActive() {
+        if (/^\s*\[\d{1,2}:\d{2}(:\d{2})?\]/.test(document.title)) return true;
+        const e = document.querySelector('#ratfight[endtime]');
+        return e ? (Number(e.getAttribute('endtime')) * 1000 > Date.now()) : false;
+    }
+    const getTokenElevator = () => document.querySelector('[onclick*="elevatorToRatByHuntclubBadge"]');
+
+    function getCurrentLevel() {
+        for (const el of document.querySelectorAll('.holders')) {
+            const m = (el.textContent || '').match(/Уровень\s+спуска:\s*(\d+)/i);
+            if (m) return parseInt(m[1], 10);
+        }
+        return null;
+    }
+    const getTrackButton = () => document.querySelector('[onclick*="metroTrackRat"]');
+    const getFightButton = () => document.querySelector('[onclick*="metroFightRat"]');
+    const getLeaveButton = () => document.querySelector('[onclick*="metroLeaveFightRat"]');
+
+    // количество нужной награды у текущей крысомахи (0, если её нет)
+    function getRewardCount() {
+        for (const obj of document.querySelectorAll('.object-thumb')) {
+            const img = obj.querySelector('img');
+            if (!img || (img.getAttribute('src') || '') !== REWARD_IMG) continue;
+            const c = obj.querySelector('.count');
+            if (!c) continue;
+            const n = parseInt((c.textContent || '').replace(/[^\d]/g, ''), 10);
+            return isNaN(n) ? 0 : n;
+        }
+        return 0;
+    }
+
+    // ============================================================
+    //  ХЕЛПЕРЫ
+    // ============================================================
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    async function waitFor(fn, timeout = POLL_TIMEOUT, interval = POLL_STEP) {
+        const t0 = Date.now();
+        while (Date.now() - t0 < timeout) { const v = fn(); if (v) return v; await sleep(interval); }
+        return null;
+    }
+
+    function clickEl(el) {
+        if (!el) return false;
+        try {
+            const oc = el.getAttribute && el.getAttribute('onclick');
+            if (oc) { new Function(oc).call(el); return true; }
+            el.click(); return true;
+        } catch (e) { log('⚠️ click: ' + e.message); return false; }
+    }
+
+    function log(msg) { console.log('[RatSearch] ' + msg); }
+
+    // алерт средствами игры (с фолбэком)
+    function gameAlert(title, text) {
+        try { if (typeof showAlert === 'function') { showAlert(title, text); return; } } catch (e) {}
+        try { if (typeof moswar !== 'undefined' && moswar && moswar.showPopup) { moswar.showPopup(title, text, 6000); return; } } catch (e) {}
+        alert(title + '\n' + text);
+    }
+
+    // гладкая навигация в метро (как в MWLB) — без полной перезагрузки
+    async function goMetro() {
+        try { AngryAjax.goToUrl('/metro/'); } catch (e) { location.href = '/metro/'; }
+        return waitFor(() => onMetro() && getTrackButton(), POLL_TIMEOUT);
+    }
+
+    // ============================================================
+    //  ДОБИВАНИЕ БОЯ — ТОЛЬКО обычные удары (способности НЕ используем)
+    // ============================================================
+    async function restoreHP() {
+        const body = new FormData();
+        body.append('action', 'restorehp');
+        await fetch('/player/restorehp/', { body, method: 'POST', mode: 'cors', credentials: 'include' });
+    }
+    // makeTurn — частые POST attack (как в рейде), решают бой на сервере мгновенно, без таймеров хода
+    async function makeTurn(count = 15) {
+        for (let i = 0; i < count; i++) {
+            const res = await fetch('/fight/', {
+                headers: { accept: '*/*', 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8', 'x-requested-with': 'XMLHttpRequest' },
+                body: 'action=attack&json=1', method: 'POST', mode: 'cors', credentials: 'include'
+            });
+            const data = JSON.parse(await res.text());
+            if (data.result === 0) break; // бой завершён
+        }
+    }
+
+    const isGroupFightUrl = () => /^\/fight\/\d+\/?$/.test(location.pathname);
+
+    // довести бой до конца: групповой — только обычные удары (makeTurn); дуэль — ждём окончания
+    async function resolveFight() {
+        if (isGroupFightUrl()) {
+            // как в рейде: один проход makeTurn с ранним выходом при result:0; небольшой запас на добивание больших боёв
+            let g = 0;
+            while (isRunning && playerState() === 'fight' && g < 3) { g++; try { await makeTurn(50); } catch (e) {} }
+            return playerState() !== 'fight';
+        }
+        for (let i = 0; i < FIGHT_STEPS; i++) {
+            if (!isRunning) return false;
+            if (playerState() !== 'fight') return true;
+            await sleep(400);
+        }
+        return false;
+    }
+
+    // режим жетонов: довести до состояния "идёт встреча".
+    // ≤35: лифт сразу кидает во встречу. 36-39: после лифта монстра нет — надо ещё "Выследить".
+    async function tokensEnsureMonster() {
+        if (getFightButton() || getLeaveButton()) return true;
+        await sleep(300);
+        // кулдаун → сбросить лифтом
+        if (metroCooldownActive()) {
+            const elev = getTokenElevator();
+            if (!elev) return false;
+            clickEl(elev); await sleep(ELEVATOR_DELAY);
+            await waitFor(() => getFightButton() || getLeaveButton() || getTrackButton(), 4500);
+            if (getFightButton() || getLeaveButton()) return true;
+        }
+        // встречи нет, но есть "Выследить" → выследить (свежий спуск и 36-39 после лифта)
+        if (!getFightButton() && !getLeaveButton() && getTrackButton()) {
+            clickEl(getTrackButton()); await sleep(TRACK_DELAY);
+            await waitFor(() => getFightButton() || getLeaveButton(), 4500);
+        }
+        return !!(getFightButton() || getLeaveButton());
+    }
+
+    // ============================================================
+    //  ГЛАВНЫЙ ЦИКЛ
+    // ============================================================
+    async function runMetroLoop() {
+        if (isRunning) return;
+        isRunning = true;
+        setRunFlag(true);
+        updateStartBtn();
+        log('🚀 Поиск запущен');
+
+        // если стартовали не в метро (например, остались на странице боя) — доделать и вернуться
+        if (!onMetro()) { await resolveFight(); await goMetro(); }
+
+        let lastAttackLevel = null;
+        let sameLevelCount = 0;
+        let lastLevel = null;
+        let finishedAll = false;
+        let guard = 0;
+
+        while (isRunning && guard < 2000) {
+            guard++;
+
+            const level = getCurrentLevel();
+            if (level != null) lastLevel = level;
+            if (level != null && level > MAX_LEVEL) { finishedAll = true; break; }
+
+            const threshold = thresholdForLevel(level);
+            let cnt = 0;
+
+            // лечимся в начале КАЖДОГО захода (до выслеживания/лифта), чтобы не словить "Вы слишком слабы".
+            // restoreHP добивает HP до полного; если HP уже полное — лечит 0 и денег не тратит.
+            try { await restoreHP(); } catch (e) {}
+
+            if (cfg.modeTokens) {
+                // ЗА ЖЕТОНЫ. Мёд НЕ трогаем НИКОГДА. Лифт сбрасывает кулдаун; на 36-39 после лифта докликиваем "Выследить".
+                const ok = await tokensEnsureMonster();
+                if (!ok) {
+                    if (onFightPage()) { await resolveFight(); await goMetro(); continue; }
+                    if (lastLevel != null && lastLevel >= MAX_LEVEL) { finishedAll = true; break; }
+                    log('⚠️ Не удалось вызвать монстра (жетоны кончились?). Стоп.'); isRunning = false; break;
+                }
+                // перекат, пока награда не подойдёт: лифт "Прокатиться" (+ "Выследить" на 36-39)
+                cnt = getRewardCount();
+                let rr = 0;
+                while (isRunning && !(threshold > 0 && cnt >= threshold) && rr < 300) {
+                    rr++;
+                    const elev = getTokenElevator();
+                    if (!elev) { log('⚠️ Лифт за жетоны недоступен (жетоны кончились?). Стоп.'); isRunning = false; break; }
+                    log(`🪙 Спуск ${level}: ${cnt} < ${threshold} → перекат за жетоны (${rr})`);
+                    clickEl(elev);
+                    await sleep(ELEVATOR_DELAY);
+                    await waitFor(() => getFightButton() || getLeaveButton() || getTrackButton(), 4500);
+                    await tokensEnsureMonster(); // на 36-39 после лифта надо ещё выследить
+                    cnt = getRewardCount();
+                }
+            } else {
+                // ЛАБУБА: «Выследить Крысомаху»
+                const tb = await waitFor(() => getTrackButton(), POLL_TIMEOUT);
+                if (!tb) {
+                    if (onFightPage()) { await resolveFight(); await goMetro(); continue; }
+                    if (lastLevel != null && lastLevel >= MAX_LEVEL) finishedAll = true; // прошли последний спуск
+                    log('🏁 Кнопка "Выследить" пропала — стоп.');
+                    break;
+                }
+                log(`🔍 Спуск ${level} | порог ≥${threshold} | выслеживаю...`);
+                clickEl(tb);
+                await sleep(TRACK_DELAY);
+                await waitFor(() => getFightButton() || getLeaveButton());
+                cnt = getRewardCount();
+            }
+
+            if (!isRunning) break;
+
+            if (threshold > 0 && cnt >= threshold) {
+                log(`🎉 Спуск ${level}: награда ${cnt} ≥ ${threshold} → НАПАСТЬ`);
+                const fb = await waitFor(() => getFightButton(), 4000);
+                if (!fb) { log('⚠️ Нет кнопки "Напасть", пропускаю'); continue; }
+                clickEl(fb);
+                await sleep(FIGHT_DELAY);
+                await resolveFight();      // дуэль авто / групповой бой — скип способностями + добивание
+
+                // последний спуск: СНАЧАЛА добить бой до конца, ПОТОМ редирект на метро, и только там — алерт
+                if ((level != null ? level : lastLevel) >= MAX_LEVEL) {
+                    let gf = 0;
+                    while (isRunning && playerState() === 'fight' && gf < 3) { gf++; try { await makeTurn(50); } catch (e) {} }
+                    try { AngryAjax.goToUrl('/metro/'); } catch (e) {}
+                    await waitFor(() => onMetro() && !onFightPage(), 9000); // ждём реального возврата на метро
+                    await sleep(1200);                                      // даём метро прогрузиться, чтобы алерт не смахнуло ре-рендером
+                    finishedAll = true;
+                    break;
+                }
+
+                await goMetro();           // гладкий редирект назад
+
+                // защита от зацикливания при проигрышах: уровень не растёт
+                const newLevel = getCurrentLevel();
+                if (lastAttackLevel != null && newLevel != null && newLevel <= lastAttackLevel) sameLevelCount++;
+                else sameLevelCount = 0;
+                lastAttackLevel = newLevel;
+                if (sameLevelCount >= SAME_LVL_STOP) { log(`⚠️ Уровень не растёт ${SAME_LVL_STOP} раз — возможно проигрыш. Стоп.`); break; }
+            } else if (!cfg.modeTokens) {
+                // Лабуба: награда мала → "Мужественно убежать" (с мини-кулдауном)
+                log(`➡️ Спуск ${level}: награда ${cnt} < ${threshold} → убегаю`);
+                const lb = await waitFor(() => getLeaveButton(), 4000);
+                if (lb) {
+                    clickEl(lb);
+                    await sleep(LEAVE_DELAY);
+                }
+            }
+        }
+
+        isRunning = false;
+        setRunFlag(false);
+        updateStartBtn();
+        if (finishedAll) {
+            log('🏁 Все 40 спусков пройдены');
+            gameAlert('🐀 Готово', 'Все 40 спусков пройдены — награды собраны!');
+            // после полного прохождения сбрасываем настройки (не храним конфиг навсегда)
+            cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+            saveCfg();
+            fillPanelFromCfg();
+        } else log('⏹️ Поиск остановлен');
+    }
+
+    function stopSearch() { isRunning = false; setRunFlag(false); updateStartBtn(); }
+
+    // ============================================================
+    //  UI
+    // ============================================================
+    const PANEL_ID = 'mw-ratsearch-panel';
+
+    function injectStyles() {
+        if (document.getElementById('mw-ratsearch-style')) return;
+        const css = `
+            #${PANEL_ID}{margin:8px 0;padding:8px 2px;border-top:1px solid rgba(150,110,40,.25);
+                background:transparent;font:12px Tahoma,Arial,sans-serif;color:#5a3d12}
+            #${PANEL_ID} .mw-rs-title{font-weight:bold;font-size:13px;margin-bottom:8px;cursor:pointer;user-select:none}
+            #${PANEL_ID} .mw-rs-arrow{display:inline-block;width:12px;font-size:10px}
+            #${PANEL_ID} .mw-rs-modes{display:flex;gap:14px;margin-bottom:10px}
+            #${PANEL_ID} .mw-rs-mode{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;width:160px}
+            #${PANEL_ID} .mw-rs-mode img{width:48px;height:48px;object-fit:contain}
+            #${PANEL_ID} .mw-rs-mode label{cursor:pointer;line-height:1.2}
+            #${PANEL_ID} .mw-rs-desc{font-size:11px;font-style:italic;color:#7a5a20;margin-bottom:10px;text-align:left}
+            #${PANEL_ID} .mw-rs-ranges{display:grid;grid-template-columns:auto 60px;gap:5px 8px;align-items:center;margin-bottom:10px}
+            #${PANEL_ID} .mw-rs-ranges span{text-align:left}
+            #${PANEL_ID} .mw-rs-ranges input{width:54px;height:22px;text-align:center;justify-self:center;border:1px solid #c9a86a;border-radius:3px}
+            #${PANEL_ID} .mw-rs-save-row{text-align:center;margin-bottom:8px}
+            #${PANEL_ID} .mw-rs-save-note{display:none;margin-top:5px;font-size:11px;color:#3f7a20}
+            #${PANEL_ID} .mw-rs-btn{display:inline-block;padding:5px 14px;border:1px solid #905b06;border-radius:4px;background:#f0c060;
+                color:#5a3d12;font-weight:bold;cursor:pointer;font-size:12px}
+            #${PANEL_ID} .mw-rs-btn:hover{background:#e8b040}
+            #${PANEL_ID} .mw-rs-start-btn{display:block;width:100%;box-sizing:border-box;text-align:center;
+                padding:9px 0;font-size:14px;background:#e0a020}
+            #${PANEL_ID} .mw-rs-start-btn:hover{background:#d49010}
+        `;
+        const st = document.createElement('style');
+        st.id = 'mw-ratsearch-style'; st.textContent = css;
+        document.head.appendChild(st);
+    }
+
+    function buildPanel() {
+        const wrap = document.createElement('div');
+        wrap.id = PANEL_ID;
+        wrap.innerHTML = `
+            <div class="mw-rs-title" id="mw-rs-toggle"><span class="mw-rs-arrow" id="mw-rs-arrow">▼</span> 🐀 Поиск наград у крысомах</div>
+            <div class="mw-rs-body" id="mw-rs-body">
+                <div class="mw-rs-modes">
+                    <div class="mw-rs-mode">
+                        <img src="/@/images/loc/buba/bubas/10.png" alt="Лабуба">
+                        <label><input type="checkbox" id="mw-rs-labubu"> Проходить с активной Лабубой</label>
+                    </div>
+                    <div class="mw-rs-mode">
+                        <img src="/@/images/obj/metro_cage.png" alt="Жетоны">
+                        <label><input type="checkbox" id="mw-rs-tokens"> Проходить за жетоны</label>
+                    </div>
+                </div>
+                <div class="mw-rs-desc">Собирает <span class="bullet"><i></i><b>пули</b></span>, <span class="sparkles"><i></i><b>искры</b></span> и <span class="snowflake"><i></i><b>снежинки</b></span> по указанным значениям.</div>
+                <div class="mw-rs-ranges">
+                    <span>с 1 спуска (1–9, макс 8):</span>     <input type="number" id="mw-rs-r1"  min="0" max="8">
+                    <span>с 10 спуска (10–15, макс 12):</span> <input type="number" id="mw-rs-r10" min="0" max="12">
+                    <span>с 16 спуска (16–20, макс 18):</span> <input type="number" id="mw-rs-r16" min="0" max="18">
+                    <span>с 21 спуска (21–40, макс 24):</span> <input type="number" id="mw-rs-r21" min="0" max="24">
+                </div>
+                <div class="mw-rs-save-row">
+                    <div class="mw-rs-btn" id="mw-rs-save">💾 Сохранить</div>
+                    <div class="mw-rs-save-note" id="mw-rs-save-note">Настройки сохранены</div>
+                </div>
+                <div class="mw-rs-btn mw-rs-start-btn" id="mw-rs-start">🚀 Запустить</div>
+            </div>
+        `;
+        return wrap;
+    }
+
+    function applyCollapsed(collapsed) {
+        const body = document.getElementById('mw-rs-body');
+        const arrow = document.getElementById('mw-rs-arrow');
+        if (body) body.style.display = collapsed ? 'none' : '';
+        if (arrow) arrow.textContent = collapsed ? '▶' : '▼';
+    }
+
+    function fillPanelFromCfg() {
+        const v = (id, val) => { const e = document.getElementById(id); if (e) e.value = val || ''; };
+        const c = (id, val) => { const e = document.getElementById(id); if (e) e.checked = !!val; };
+        c('mw-rs-labubu', cfg.modeLabubu);
+        c('mw-rs-tokens', cfg.modeTokens);
+        v('mw-rs-r1', cfg.ranges.r1); v('mw-rs-r10', cfg.ranges.r10);
+        v('mw-rs-r16', cfg.ranges.r16); v('mw-rs-r21', cfg.ranges.r21);
+        applyCollapsed(panelCollapsed);
+    }
+
+    function readPanelToCfg() {
+        const num = (id, max) => {
+            const e = document.getElementById(id);
+            let v = e ? (parseInt(e.value, 10) || 0) : 0;
+            if (v < 0) v = 0;
+            if (v > max) v = max;     // не больше максимума диапазона
+            if (e) e.value = v;       // поправляем отображение, если ввели лишнее
+            return v;
+        };
+        const chk = id => { const e = document.getElementById(id); return e ? !!e.checked : false; };
+        cfg.modeLabubu = chk('mw-rs-labubu');
+        cfg.modeTokens = chk('mw-rs-tokens');
+        cfg.ranges = { r1: num('mw-rs-r1', RANGE_MAX.r1), r10: num('mw-rs-r10', RANGE_MAX.r10), r16: num('mw-rs-r16', RANGE_MAX.r16), r21: num('mw-rs-r21', RANGE_MAX.r21) };
+    }
+
+    function showSaveNote() {
+        const note = document.getElementById('mw-rs-save-note');
+        if (!note) return;
+        note.style.display = 'block';
+        clearTimeout(note._hideTimer);
+        note._hideTimer = setTimeout(() => { note.style.display = 'none'; }, 1800);
+    }
+
+    function updateStartBtn() { const b = document.getElementById('mw-rs-start'); if (b) b.textContent = isRunning ? '⏹️ Стоп' : '🚀 Запустить'; }
+
+    function bindPanel() {
+        const toggle = document.getElementById('mw-rs-toggle');
+        const save = document.getElementById('mw-rs-save');
+        const start = document.getElementById('mw-rs-start');
+        const labubu = document.getElementById('mw-rs-labubu');
+        const tokens = document.getElementById('mw-rs-tokens');
+
+        // сворачивание панели по клику на заголовок
+        if (toggle && !toggle._bound) {
+            toggle._bound = true;
+            toggle.addEventListener('click', () => { panelCollapsed = !panelCollapsed; applyCollapsed(panelCollapsed); });
+        }
+
+        // взаимоисключающие галочки: либо Лабуба, либо жетоны
+        if (labubu && !labubu._bound) { labubu._bound = true; labubu.addEventListener('change', () => { if (labubu.checked && tokens) tokens.checked = false; }); }
+        if (tokens && !tokens._bound) { tokens._bound = true; tokens.addEventListener('change', () => { if (tokens.checked && labubu) labubu.checked = false; }); }
+
+        // ограничение ввода диапазонов по максимуму (нельзя ввести больше 8/12/18/24)
+        ['r1', 'r10', 'r16', 'r21'].forEach(k => {
+            const e = document.getElementById('mw-rs-' + k);
+            if (e && !e._bound) {
+                e._bound = true;
+                e.addEventListener('input', () => { const v = parseInt(e.value, 10); if (!isNaN(v) && v > RANGE_MAX[k]) e.value = RANGE_MAX[k]; });
+            }
+        });
+
+        if (save && !save._bound) { save._bound = true; save.addEventListener('click', () => { readPanelToCfg(); saveCfg(); showSaveNote(); }); }
+        if (start && !start._bound) {
+            start._bound = true;
+            start.addEventListener('click', () => {
+                if (isRunning) { stopSearch(); return; }
+                readPanelToCfg(); saveCfg();
+                if (cfg.modeLabubu || cfg.modeTokens) { runMetroLoop(); }       // Лабуба — убег; жетоны — лифт Харони
+                else { console.log('[RatSearch] Отметь режим: Лабуба или жетоны'); }
+            });
+        }
+    }
+
+    // стабильный контейнер блока "Обычный тоннель" — есть всегда (простой/кулдаун/встреча)
+    function getTunnelBlock() { return document.querySelector('.metro-branch'); }
+
+    function ensurePanel() {
+        if (!isMetroPage) return;
+        if (document.getElementById(PANEL_ID)) { bindPanel(); return; }
+
+        // панель ВСЕГДА в блоке "Обычный тоннель" — сразу после описания (этот узел стабилен во всех состояниях)
+        const block = getTunnelBlock();
+        if (!block) return;
+
+        injectStyles();
+        const panel = buildPanel();
+        const desc = block.querySelector(':scope > p');
+        if (desc) block.insertBefore(panel, desc.nextSibling);
+        else block.insertBefore(panel, block.firstChild);
+        fillPanelFromCfg();
+        bindPanel();
+        updateStartBtn();
+        log('Панель готова');
+    }
+
+    // ============================================================
+    //  ОТСЛЕЖИВАНИЕ СТРАНИЦЫ
+    // ============================================================
+    function setupObserver() {
+        observer = new MutationObserver(() => {
+            isMetroPage = onMetro();
+            if (isMetroPage) ensurePanel();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+    function startPageChecker() {
+        setInterval(() => {
+            const m = onMetro();
+            if (m) { isMetroPage = true; ensurePanel(); }
+            else if (!m && isMetroPage) { isMetroPage = false; }
+        }, 1000);
+    }
+
+    function init() {
+        isMetroPage = onMetro();
+        setRunFlag(false);   // при любой перезагрузке страницы (F5) поиск НЕ возобновляем — это надёжный СТОП
+        setupObserver();
+        if (isMetroPage) ensurePanel();
+        startPageChecker();
+        console.log('[RatSearch] v2.2 загружен');
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+})();
+//// METRO RAT SEARCH КОНЕЦ
+
+
+
+
+
 
 //Добавляю кнопки для уток и яростного инжектора в рейды
   const AUTO = {
