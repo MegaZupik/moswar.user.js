@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.13
+// @version        9.3
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -579,7 +579,12 @@ setInterval(showCountryPercent, 500);
 //Добавляю кнопки для уток и яростного инжектора в рейды
   const AUTO = {
     duck: localStorage.getItem('mw-duck') !== '0',
-    fury: localStorage.getItem('mw-fury') === '1'
+    fury: localStorage.getItem('mw-fury') === '1',
+      helmet:
+localStorage.getItem("mw-helmet") === "1",
+
+helmetCount:
+Number(localStorage.getItem("mw-helmet-count")) || 1,
 };
 
 
@@ -3324,6 +3329,50 @@ async function throwDuck() {
         return false;
     }
 }
+async function throwHelmet() {
+
+    let helmetId = findItemByImage("helmet_mf1.png");
+
+    if (helmetId) {
+
+        console.log(`[AUTO] Found Helmet with ID: ${helmetId}. Using it...`);
+
+        let fightUrl = window.location.href;
+        let referrerPath = new URL(fightUrl).pathname;
+
+
+        await fetch(
+            new URL(window.location.href).origin + "/fight/",
+            {
+                headers:{
+                    "content-type":"application/x-www-form-urlencoded; charset=UTF-8",
+                    "x-requested-with":"XMLHttpRequest"
+                },
+
+                body:
+                `action=useitem&json=1&target=${helmetId}&__referrer=${encodeURIComponent(referrerPath)}&return_url=${encodeURIComponent(referrerPath)}`,
+
+                method:"POST",
+
+                credentials:"include"
+            }
+        );
+
+
+        await At(0.3);
+
+        return true;
+
+    } 
+    else {
+
+        console.log("[AUTO] Helmet not found in fight actions.");
+
+        return false;
+
+    }
+
+}
     var en = (e, t) => {
         for (var n in t) ke(e, n, { get: t[n], enumerable: !0 });
       },
@@ -5565,7 +5614,13 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
         }
 
         console.log("[PVP] Handle group fight.");
-
+if(AUTO.helmet)
+{
+    for(let i = 0; i < AUTO.helmetCount; i++)
+    {
+        await throwHelmet();
+    }
+}
 if(AUTO.fury)
 {
     await z(G.x2NPC);
