@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MosWar Primary Pass Counter + Raid Stats
 // @namespace    http://tampermonkey.net/
-// @version      5.5
+// @version      5.7
 // @description  Счетчик предметов MosWar с рейд статистикой
 // @match        https://www.moswar.ru/*
 // @grant        none
@@ -151,6 +151,14 @@ if (percent >= 0.95) {
     winColor = "lime";
 }
 
+let totalsColor = "white";
+
+if (percent >= 0.95) {
+    totalsColor = "red";
+} else if (percent >= 0.90) {
+    totalsColor = "lime";
+}
+
 
 
 box.innerHTML=`
@@ -173,7 +181,9 @@ ${raidInfo.win} / ${raidInfo.max}
 🔥 ${raidInfo.hype}<br>
 ⚔️ ${raidInfo.cool}<br>
 🔁 ${raidInfo.repeat}<br>
-${raidInfo.totals}
+<span style="color:${totalsColor}; font-weight:bold;">
+    ${raidInfo.totals}
+</span>
 </div>
 
 <div id="mw-items" style="display:flex;gap:12px;">
