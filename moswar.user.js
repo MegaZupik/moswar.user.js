@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.02
+// @version        9.1
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -17,13 +17,13 @@
 
 
 /// вот тут подствека стран для рейдов
-function highlightCountries() {
+function showCountryPercent() {
     const select = document.getElementById("travel-2-country");
     if (!select) return;
 
     [...select.options].forEach(option => {
-        option.style.background = "";
-        option.style.color = "";
+        // убираем старый процент, если функция вызвалась повторно
+        option.text = option.text.replace(/\s+[🟢🔴]?\(\d+(?:\.\d+)?%\)$/, "");
 
         const match = option.text.match(/(\d+)\s*\/\s*(\d+)/);
         if (!match) return;
@@ -31,17 +31,16 @@ function highlightCountries() {
         const current = Number(match[1]);
         const max = Number(match[2]);
 
-        const percentLeft = ((max - current) / max) * 100;
+        const left = ((max - current) / max) * 100;
 
-        if (percentLeft <= 3) {
-            option.style.background = "rgba(255, 80, 80, .35)";
-        } else if (percentLeft <= 8) {
-            option.style.background = "rgba(80, 255, 80, .35)";
+        if (left < 10) {
+            const icon = left <= 3 ? "🔴" : "🟢";
+            option.text += ` ${icon}(${left.toFixed(1)}%)`;
         }
     });
 }
 
-highlightCountries();
+showCountryPercent();
 
 
 
