@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.01
+// @version        9.02
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,37 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+
+
+/// вот тут подствека стран для рейдов
+function highlightCountries() {
+    const select = document.getElementById("travel-2-country");
+    if (!select) return;
+
+    [...select.options].forEach(option => {
+        option.style.background = "";
+        option.style.color = "";
+
+        const match = option.text.match(/(\d+)\s*\/\s*(\d+)/);
+        if (!match) return;
+
+        const current = Number(match[1]);
+        const max = Number(match[2]);
+
+        const percentLeft = ((max - current) / max) * 100;
+
+        if (percentLeft <= 3) {
+            option.style.background = "rgba(255, 80, 80, .35)";
+        } else if (percentLeft <= 8) {
+            option.style.background = "rgba(80, 255, 80, .35)";
+        }
+    });
+}
+
+highlightCountries();
+
+
 
 
 //// METRO RAT SEARCH НАЧАЛО
