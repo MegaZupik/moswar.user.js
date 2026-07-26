@@ -1,10 +1,11 @@
 // ==UserScript==
-// @name         Moswar Mini Group Inventory Live
-// @namespace    http://tampermonkey.net/
-// @version      3.3
-// @description  Mini live group inventory
-// @match        *://www.moswar.ru/*
+// @name         Moswar Mini Group Inventory
+// @namespace    https://www.moswar.ru/
+// @version      4.0
+// @description  Mini group inventory
+// @match        https://www.moswar.ru/*
 // @grant        none
+// @run-at       document-end
 // ==/UserScript==
 
 (function(){
@@ -12,185 +13,248 @@
 'use strict';
 
 
-const POS_KEY = "mw-mini-inventory-button-pos";
+const BTN_ID = "mw-mini-inventory-button";
+const INV_ID = "mw-mini-inventory";
+const POS_KEY = "mw_mini_inventory_pos";
 
 
 
-function createUI(){
-
-
-    if(document.querySelector("#mw-mini-wrapper"))
-        return;
+if(document.querySelector("#"+BTN_ID))
+    return;
 
 
 
-    let wrap=document.createElement("div");
+function savePos(el){
 
-    wrap.id="mw-mini-wrapper";
+    localStorage.setItem(
+        POS_KEY,
+        JSON.stringify({
+            left:el.style.left,
+            top:el.style.top
+        })
+    );
+
+}
 
 
-    Object.assign(wrap.style,{
+
+
+
+function createButton(){
+
+
+    let b=document.createElement("div");
+
+    b.id=BTN_ID;
+
+
+
+    let pos =
+    JSON.parse(
+        localStorage.getItem(POS_KEY)||"null"
+    );
+
+
+
+    Object.assign(b.style,{
+
         position:"fixed",
-        left:"300px",
-        top:"200px",
-        zIndex:"9999999"
+
+        left:pos ? pos.left : "20px",
+
+        top:pos ? pos.top : "80px",
+
+        width:"65px",
+
+        height:"65px",
+
+        background:"#333",
+
+        border:"2px solid #aaa",
+
+        borderRadius:"12px",
+
+        zIndex:"999999",
+
+        display:"flex",
+
+        alignItems:"center",
+
+        justifyContent:"center",
+
+        touchAction:"none",
+
+        userSelect:"none",
+
+        cursor:"pointer"
+
     });
 
 
 
-    let saved =
-    JSON.parse(localStorage.getItem(POS_KEY));
+
+    let img=document.createElement("img");
+
+    img.src="/@/images/obj/injectors/22_box.png";
+
+    img.width=55;
+
+    img.height=55;
 
 
-    if(saved){
+    b.appendChild(img);
 
-        wrap.style.left=saved.left;
-        wrap.style.top=saved.top;
+
+    document.body.appendChild(b);
+
+
+
+
+
+
+    let drag=false;
+
+    let moved=false;
+
+    let dx=0;
+
+    let dy=0;
+
+
+
+
+    function start(x,y){
+
+        drag=true;
+
+        moved=false;
+
+        dx=x-b.offsetLeft;
+
+        dy=y-b.offsetTop;
 
     }
 
 
 
-    let btn=document.createElement("img");
 
+    function move(x,y){
 
-    btn.src="/@/images/obj/injectors/22_box.png";
-
-
-    Object.assign(btn.style,{
-
-        width:"55px",
-        height:"55px",
-        cursor:"pointer",
-        userSelect:"none",
-        touchAction:"none",
-        webkitUserDrag:"none"
-
-    });
-
-
-
-    wrap.appendChild(btn);
-
-    document.body.appendChild(wrap);
-
-
-
-
-    let drag={
-
-        active:false,
-        moved:false,
-        x:0,
-        y:0,
-        left:0,
-        top:0
-
-    };
-
-
-
-
-    btn.addEventListener("pointerdown",e=>{
-
-
-        drag.active=true;
-        drag.moved=false;
-
-
-        let r=wrap.getBoundingClientRect();
-
-
-        drag.x=e.clientX;
-        drag.y=e.clientY;
-
-
-        drag.left=r.left;
-        drag.top=r.top;
-
-
-        btn.setPointerCapture(e.pointerId);
-
-
-    });
-
-
-
-
-
-    btn.addEventListener("pointermove",e=>{
-
-
-        if(!drag.active)
-            return;
-
-
-        let dx=e.clientX-drag.x;
-        let dy=e.clientY-drag.y;
-
-
-        if(Math.abs(dx)>3 || Math.abs(dy)>3)
-            drag.moved=true;
-
-
-
-        wrap.style.left =
-        drag.left+dx+"px";
-
-
-        wrap.style.top =
-        drag.top+dy+"px";
-
-
-    });
-
-
-
-
-
-    btn.addEventListener("pointerup",()=>{
-
-
-        drag.active=false;
-
-
-        localStorage.setItem(
-            POS_KEY,
-            JSON.stringify({
-
-                left:wrap.style.left,
-                top:wrap.style.top
-
-            })
-        );
-
-
-    });
-
-
-
-
-
-
-
-    btn.addEventListener("click",()=>{
-
-
-        if(drag.moved)
+        if(!drag)
             return;
 
 
 
-        let inv =
-        document.querySelector(
-            "#mw-mini-inventory"
-        );
+        if(
+            Math.abs(x-b.offsetLeft)>5 ||
+            Math.abs(y-b.offsetTop)>5
+        )
+            moved=true;
 
 
 
-        if(inv){
+        b.style.left=(x-dx)+"px";
 
-            inv.remove();
+        b.style.top=(y-dy)+"px";
+
+    }
+
+
+
+
+
+    function end(){
+
+        if(!drag)
+            return;
+
+
+        drag=false;
+
+
+        savePos(b);
+
+    }
+
+
+
+
+
+    b.addEventListener(
+        "mousedown",
+        e=>start(e.clientX,e.clientY)
+    );
+
+
+    document.addEventListener(
+        "mousemove",
+        e=>move(e.clientX,e.clientY)
+    );
+
+
+    document.addEventListener(
+        "mouseup",
+        end
+    );
+
+
+
+
+
+
+    b.addEventListener(
+        "touchstart",
+        e=>{
+
+            let t=e.touches[0];
+
+            start(t.clientX,t.clientY);
+
+        },
+        {passive:false}
+    );
+
+
+
+    b.addEventListener(
+        "touchmove",
+        e=>{
+
+            let t=e.touches[0];
+
+            move(t.clientX,t.clientY);
+
+            e.preventDefault();
+
+        },
+        {passive:false}
+    );
+
+
+
+    b.addEventListener(
+        "touchend",
+        end
+    );
+
+
+
+
+
+    b.onclick=()=>{
+
+
+        if(moved)
+            return;
+
+
+
+        let old=document.querySelector("#"+INV_ID);
+
+
+        if(old){
+
+            old.remove();
 
             return;
 
@@ -198,117 +262,7 @@ function createUI(){
 
 
 
-        loadInventory();
-
-
-    });
-
-
-
-}
-
-
-
-
-
-
-
-
-
-
-function loadInventory(){
-
-
-    console.log("Создаю player iframe");
-
-
-
-    let old=document.querySelector("#mw-player-frame");
-
-    if(old)
-        old.remove();
-
-
-
-
-    let frame=document.createElement("iframe");
-
-
-    frame.id="mw-player-frame";
-
-
-
-    Object.assign(frame.style,{
-
-        position:"fixed",
-        width:"1px",
-        height:"1px",
-        opacity:"0",
-        pointerEvents:"none",
-        left:"-20px",
-        top:"-20px"
-
-    });
-
-
-
-
-    frame.src="/player/?_="+Date.now();
-
-
-    document.body.appendChild(frame);
-
-
-
-
-
-    frame.onload=()=>{
-
-
-        console.log("iframe загружен");
-
-
-
-        let timer=setInterval(()=>{
-
-
-            try{
-
-
-                let inv =
-                frame.contentDocument
-                .querySelector("#slots-groupfight-place");
-
-
-
-                if(inv){
-
-
-                    console.log("Карман найден");
-
-
-                    clearInterval(timer);
-
-
-
-                    showInventory(
-                        inv.cloneNode(true)
-                    );
-
-
-
-                    frame.remove();
-
-
-                }
-
-
-            }catch(e){}
-
-
-
-        },500);
-
+        loadInventory(b);
 
 
     };
@@ -325,31 +279,83 @@ function loadInventory(){
 
 
 
-function showInventory(inv){
+function loadInventory(button){
+
+
+    console.log("Запрос player");
 
 
 
-    let old =
-    document.querySelector(
-        "#mw-mini-inventory"
-    );
+    fetch(
+        "/player/?_="+Date.now(),
+        {
+            credentials:"include"
+        }
+    )
+    .then(r=>r.text())
+    .then(html=>{
 
 
-    if(old)
-        old.remove();
-
-
-
-
-    inv.id="mw-mini-inventory";
-
-
-
-    inv.style.display="block";
-
+        let doc =
+        new DOMParser()
+        .parseFromString(
+            html,
+            "text/html"
+        );
 
 
 
+        let inv =
+        doc.querySelector(
+            "#slots-groupfight-place"
+        );
+
+
+
+        if(!inv){
+
+            console.log("Карман не найден");
+
+            return;
+
+        }
+
+
+
+        console.log("Карман найден");
+
+
+
+        showInventory(
+            inv.cloneNode(true),
+            button
+        );
+
+
+
+    });
+
+
+
+}
+
+
+
+
+
+
+
+
+
+function showInventory(inv,button){
+
+
+
+    inv.id=INV_ID;
+
+
+
+    // убрать заголовок
 
     inv.querySelector(
         ".slots-groupfight-header"
@@ -357,11 +363,11 @@ function showInventory(inv){
 
 
 
+    // убрать крестик
+
     inv.querySelector(
         ".close-cross"
     )?.remove();
-
-
 
 
 
@@ -374,13 +380,7 @@ function showInventory(inv){
 
 
 
-
-
     if(list){
-
-
-        // ВАЖНО:
-        // пустой слот НЕ удаляем
 
 
         Object.assign(list.style,{
@@ -389,7 +389,7 @@ function showInventory(inv){
 
             flexDirection:"column",
 
-            flexWrap:"nowrap",
+            gap:"5px",
 
             width:"max-content",
 
@@ -399,12 +399,9 @@ function showInventory(inv){
 
             maxWidth:"none",
 
-            overflow:"visible",
-
-            gap:"5px"
+            overflow:"visible"
 
         });
-
 
 
     }
@@ -412,22 +409,19 @@ function showInventory(inv){
 
 
 
-
-
     inv.querySelectorAll(
         ".object-thumb"
     )
-    .forEach(el=>{
+    .forEach(x=>{
 
 
-        Object.assign(el.style,{
+        Object.assign(x.style,{
 
             width:"max-content",
 
             height:"max-content"
 
         });
-
 
 
     });
@@ -441,9 +435,11 @@ function showInventory(inv){
 
         display:"block",
 
-        position:"relative",
+        position:"absolute",
 
-        marginTop:"5px",
+        left:"0",
+
+        top:"70px",
 
         width:"max-content",
 
@@ -453,23 +449,19 @@ function showInventory(inv){
 
         transformOrigin:"top left",
 
-        zIndex:"9999999"
+        zIndex:"999999"
 
     });
 
 
 
 
-
-
-    document
-    .querySelector("#mw-mini-wrapper")
-    .appendChild(inv);
+    button.appendChild(inv);
 
 
 
     console.log(
-        "Мини инвентарь показан"
+        "Инвентарь показан"
     );
 
 
@@ -480,11 +472,7 @@ function showInventory(inv){
 
 
 
-
-setTimeout(
-    createUI,
-    2000
-);
+createButton();
 
 
 
