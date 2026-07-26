@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.1
+// @version        9.11
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -16,31 +16,32 @@
 
 
 
-/// вот тут подствека стран для рейдов
 function showCountryPercent() {
     const select = document.getElementById("travel-2-country");
     if (!select) return;
 
     [...select.options].forEach(option => {
-        // убираем старый процент, если функция вызвалась повторно
-        option.text = option.text.replace(/\s+[🟢🔴]?\(\d+(?:\.\d+)?%\)$/, "");
+        if (option.dataset.percentDone) return;
 
         const match = option.text.match(/(\d+)\s*\/\s*(\d+)/);
         if (!match) return;
 
-        const current = Number(match[1]);
-        const max = Number(match[2]);
+        const current = +match[1];
+        const max = +match[2];
 
         const left = ((max - current) / max) * 100;
 
         if (left < 10) {
             const icon = left <= 3 ? "🔴" : "🟢";
-            option.text += ` ${icon}(${left.toFixed(1)}%)`;
+            option.text += ` ${icon}${left.toFixed(1)}%`;
         }
+
+        option.dataset.percentDone = "1";
     });
 }
 
-showCountryPercent();
+// Проверяем каждые полсекунды
+setInterval(showCountryPercent, 500);
 
 
 
