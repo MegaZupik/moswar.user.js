@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.11
+// @version        9.13
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -26,21 +26,29 @@ function showCountryPercent() {
         const match = option.text.match(/(\d+)\s*\/\s*(\d+)/);
         if (!match) return;
 
-        const current = +match[1];
-        const max = +match[2];
+        const current = Number(match[1]);
+        const max = Number(match[2]);
 
         const left = ((max - current) / max) * 100;
 
-        if (left < 10) {
-            const icon = left <= 3 ? "🔴" : "🟢";
-            option.text += ` ${icon}${left.toFixed(1)}%`;
+        let icon;
+        if (left <= 3) {
+            icon = "🔴";
+        } else if (left <= 10) {
+            icon = "🟢";
+        } else {
+            icon = "🔵";
         }
 
+        option.text += ` ${icon}${left.toFixed(1)}%`;
         option.dataset.percentDone = "1";
     });
 }
 
-// Проверяем каждые полсекунды
+// Первый запуск
+showCountryPercent();
+
+// И затем проверяем каждые полсекунды
 setInterval(showCountryPercent, 500);
 
 
