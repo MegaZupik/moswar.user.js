@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.3
+// @version        9.4
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -14,8 +14,263 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
+////кнопка шлема для рейдов
+// ===============================
+// HELMET BUTTON
+// ===============================
+
+function createHelmetButton(){
+
+    if(document.querySelector("#mw-helmet-btn"))
+        return;
 
 
+    let path = location.pathname;
+
+
+    // где кнопка разрешена
+    let allowed = [
+        "/travel2/"
+    ];
+
+
+    // если страница не разрешена — ничего не создаём
+    if(!allowed.some(x => path.startsWith(x)))
+        return;
+
+
+
+    let wrap=document.createElement("div");
+
+    wrap.id="mw-helmet-btn";
+
+
+    let saved =
+    JSON.parse(
+        localStorage.getItem("mw-helmet-pos") || "null"
+    );
+
+
+    Object.assign(wrap.style,{
+
+        position:"fixed",
+        left:saved ? saved.left : "150px",
+        top:saved ? saved.top : "80px",
+
+        width:"65px",
+        height:"65px",
+
+        background:"#333",
+        border:"2px solid #aaa",
+        borderRadius:"12px",
+
+        zIndex:999999,
+
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"center",
+
+        touchAction:"none",
+        userSelect:"none"
+
+    });
+
+
+    let img=document.createElement("img");
+
+    img.src="/@/images/obj/helmet_mf1.png";
+
+
+    Object.assign(img.style,{
+
+        width:"55px",
+        height:"55px",
+        pointerEvents:"none"
+
+    });
+
+
+    wrap.appendChild(img);
+
+
+    let input=document.createElement("input");
+
+    input.type="number";
+    input.min=1;
+
+    input.value=
+    localStorage.getItem("mw-helmet-count") || 1;
+
+
+    Object.assign(input.style,{
+
+        position:"absolute",
+        bottom:"-25px",
+
+        width:"55px",
+        height:"20px",
+
+        textAlign:"center"
+
+    });
+
+
+    input.onclick=e=>{
+        e.stopPropagation();
+    };
+
+
+    input.onchange=()=>{
+
+        localStorage.setItem(
+            "mw-helmet-count",
+            input.value
+        );
+
+    };
+
+
+    wrap.appendChild(input);
+
+
+    document.body.appendChild(wrap);
+
+
+
+    // тот же drag как duck
+
+
+    let drag={
+        active:false,
+        moved:false,
+        x:0,
+        y:0,
+        left:0,
+        top:0
+    };
+
+
+
+    wrap.addEventListener("pointerdown",e=>{
+
+
+        if(e.target===input)
+            return;
+
+
+        drag.active=true;
+        drag.moved=false;
+
+
+        let r=wrap.getBoundingClientRect();
+
+
+        drag.x=e.clientX;
+        drag.y=e.clientY;
+
+
+        drag.left=r.left;
+        drag.top=r.top;
+
+
+        wrap.setPointerCapture(
+            e.pointerId
+        );
+
+
+    });
+
+
+
+    wrap.addEventListener("pointermove",e=>{
+
+
+        if(!drag.active)
+            return;
+
+
+        let dx=e.clientX-drag.x;
+        let dy=e.clientY-drag.y;
+
+
+        if(Math.abs(dx)>3 || Math.abs(dy)>3)
+            drag.moved=true;
+
+
+        wrap.style.left=
+        drag.left+dx+"px";
+
+
+        wrap.style.top=
+        drag.top+dy+"px";
+
+
+    });
+
+
+
+    wrap.addEventListener("pointerup",()=>{
+
+
+        drag.active=false;
+
+
+        localStorage.setItem(
+            "mw-helmet-pos",
+            JSON.stringify({
+
+                left:wrap.style.left,
+                top:wrap.style.top
+
+            })
+        );
+
+
+    });
+
+
+
+    wrap.onclick=()=>{
+
+
+        if(drag.moved)
+            return;
+
+
+        let state =
+        localStorage.getItem("mw-helmet") !== "1";
+
+
+        localStorage.setItem(
+            "mw-helmet",
+            state ? "1":"0"
+        );
+
+
+        wrap.style.opacity =
+        state ? "1":"0.4";
+
+
+    };
+
+
+
+    if(
+        localStorage.getItem("mw-helmet")==="0"
+    )
+        wrap.style.opacity="0.4";
+
+
+}
+
+
+
+// запуск с задержкой
+setTimeout(()=>{
+    createHelmetButton();
+},1000);
+
+/////проценты в странах для визуала
 function showCountryPercent() {
     const select = document.getElementById("travel-2-country");
     if (!select) return;
@@ -580,11 +835,7 @@ setInterval(showCountryPercent, 500);
   const AUTO = {
     duck: localStorage.getItem('mw-duck') !== '0',
     fury: localStorage.getItem('mw-fury') === '1',
-      helmet:
-localStorage.getItem("mw-helmet") === "1",
-
-helmetCount:
-Number(localStorage.getItem("mw-helmet-count")) || 1,
+    helmet: localStorage.getItem('mw-helmet') !== '0',
 };
 
 
@@ -595,7 +846,9 @@ function createTravelButtons(){
 
         let duck = document.querySelector('#mw-duck-btn');
         let fury = document.querySelector('#mw-fury-btn');
+        let helmet = document.querySelector('#mw-helmet-btn');
 
+        if(helmet) helmet.remove();
         if(duck) duck.remove();
         if(fury) fury.remove();
 
@@ -611,184 +864,331 @@ function createTravelButtons(){
 
     function makeDraggable(el, key){
 
-    let saved = localStorage.getItem(key);
+        let saved = localStorage.getItem(key);
 
-    if(saved){
-        let pos = JSON.parse(saved);
-        el.style.left = pos.left + "px";
-        el.style.top = pos.top + "px";
-    }
+        if(saved){
 
-    let drag = false;
-    let moved = false;
+            let pos = JSON.parse(saved);
 
-    let dx = 0;
-    let dy = 0;
+            el.style.left = pos.left + "px";
+            el.style.top = pos.top + "px";
 
-    let startX = 0;
-    let startY = 0;
-
-    function start(x, y){
-
-        drag = true;
-        moved = false;
-
-        startX = x;
-        startY = y;
-
-        dx = x - el.offsetLeft;
-        dy = y - el.offsetTop;
-    }
-
-    function move(x, y){
-
-        if(!drag)
-            return;
-
-        if(
-            Math.abs(x - startX) > 5 ||
-            Math.abs(y - startY) > 5
-        ){
-            moved = true;
         }
 
-        el.style.left = (x - dx) + "px";
-        el.style.top = (y - dy) + "px";
-    }
 
-    function end(){
 
-        if(!drag)
-            return;
+        let drag = false;
+        let moved = false;
 
-        drag = false;
+        let dx = 0;
+        let dy = 0;
 
-        localStorage.setItem(
-            key,
-            JSON.stringify({
-                left: el.offsetLeft,
-                top: el.offsetTop
-            })
-        );
-    }
+        let startX = 0;
+        let startY = 0;
 
-    // ПК
-    el.addEventListener("mousedown", e=>{
-        e.preventDefault();
-        start(e.clientX, e.clientY);
-    });
 
-    document.addEventListener("mousemove", e=>{
-        move(e.clientX, e.clientY);
-    });
 
-    document.addEventListener("mouseup", end);
+        function start(x,y){
 
-    // Телефон
-    el.addEventListener("touchstart", e=>{
-        let t = e.touches[0];
-        start(t.clientX, t.clientY);
-    }, {passive:false});
+            drag=true;
+            moved=false;
 
-    document.addEventListener("touchmove", e=>{
-        if(!drag) return;
-        let t = e.touches[0];
-        move(t.clientX, t.clientY);
-        e.preventDefault();
-    }, {passive:false});
+            startX=x;
+            startY=y;
 
-    document.addEventListener("touchend", end);
-    document.addEventListener("touchcancel", end);
+            dx=x-el.offsetLeft;
+            dy=y-el.offsetTop;
 
-    // Чтобы после перетаскивания не срабатывал клик
-    el.addEventListener("click", function(e){
-        if(moved){
+        }
+
+
+
+        function move(x,y){
+
+            if(!drag)
+                return;
+
+
+            if(
+                Math.abs(x-startX)>5 ||
+                Math.abs(y-startY)>5
+            ){
+
+                moved=true;
+
+            }
+
+
+
+            el.style.left =
+            (x-dx)+"px";
+
+
+            el.style.top =
+            (y-dy)+"px";
+
+        }
+
+
+
+
+        function end(){
+
+            if(!drag)
+                return;
+
+
+            drag=false;
+
+
+            localStorage.setItem(
+                key,
+                JSON.stringify({
+
+                    left:el.offsetLeft,
+
+                    top:el.offsetTop
+
+                })
+            );
+
+        }
+
+
+
+
+
+        // ПК
+        el.addEventListener("mousedown",e=>{
+
+
+            // поле ввода не двигает кнопку
+            if(e.target.tagName==="INPUT")
+                return;
+
+
             e.preventDefault();
-            e.stopImmediatePropagation();
-            moved = false;
-        }
-    }, true);
 
-}
-
-    function makeBtn(id,img,storage,callback){
+            start(
+                e.clientX,
+                e.clientY
+            );
 
 
-        let btn=document.createElement('div');
+        });
+
+
+
+
+        document.addEventListener(
+            "mousemove",
+            e=>{
+
+                move(
+                    e.clientX,
+                    e.clientY
+                );
+
+            }
+        );
+
+
+
+        document.addEventListener(
+            "mouseup",
+            end
+        );
+
+
+
+
+
+
+        // телефон
+        el.addEventListener(
+            "touchstart",
+            e=>{
+
+
+                if(e.target.tagName==="INPUT")
+                    return;
+
+
+                let t=e.touches[0];
+
+                start(
+                    t.clientX,
+                    t.clientY
+                );
+
+
+            },
+            {passive:false}
+        );
+
+
+
+        document.addEventListener(
+            "touchmove",
+            e=>{
+
+
+                if(!drag)
+                    return;
+
+
+                let t=e.touches[0];
+
+
+                move(
+                    t.clientX,
+                    t.clientY
+                );
+
+
+                e.preventDefault();
+
+
+            },
+            {passive:false}
+        );
+
+
+
+        document.addEventListener(
+            "touchend",
+            end
+        );
+
+
+
+        document.addEventListener(
+            "touchcancel",
+            end
+        );
+
+
+
+
+
+        el.addEventListener(
+            "click",
+            e=>{
+
+
+                if(moved){
+
+                    e.preventDefault();
+
+                    e.stopImmediatePropagation();
+
+                    moved=false;
+
+                }
+
+
+            },
+            true
+        );
+
+
+    }
+
+
+
+
+
+
+
+    function makeBtn(id,img,callback){
+
+
+        let btn=document.createElement("div");
+
 
         btn.id=id;
 
 
+
         btn.innerHTML=`
-            <img src="${img}"
-            style="
-            width:64px;
-            height:64px;
-            pointer-events:none;">
-            <span></span>
+
+        <img src="${img}"
+        style="
+        width:64px;
+        height:64px;
+        pointer-events:none;
+        ">
+
+        <span></span>
+
         `;
 
 
 
         btn.style.cssText=`
 
-            position:fixed;
+        position:fixed;
 
-            width:80px;
-            height:80px;
+        width:80px;
 
-            background:#333;
+        height:80px;
 
-            border:3px solid #888;
+        background:#333;
 
-            border-radius:12px;
+        border:3px solid #888;
 
-            display:flex;
+        border-radius:12px;
 
-            align-items:center;
+        display:flex;
 
-            justify-content:center;
+        align-items:center;
 
-            cursor:pointer;
+        justify-content:center;
 
-            z-index:2147483647;
+        cursor:pointer;
 
-            box-shadow:
-            0 0 5px black,
-            inset 0 0 8px #555;
+        z-index:2147483647;
+
+        box-shadow:
+        0 0 5px black,
+        inset 0 0 8px #555;
 
         `;
 
 
 
-        let span=btn.querySelector('span');
+
+        let span=btn.querySelector("span");
+
 
         span.style.cssText=`
 
-            position:absolute;
+        position:absolute;
 
-            bottom:2px;
+        bottom:2px;
 
-            right:4px;
+        right:4px;
 
-            font-size:16px;
+        font-size:16px;
 
-            font-weight:bold;
+        font-weight:bold;
 
-            color:white;
+        color:white;
 
         `;
+
+
 
 
 
         function update(){
 
-            let state=callback();
-
-            span.textContent=
-                state ? '' : 'OFF';
+            span.textContent =
+            callback() ? "" : "OFF";
 
         }
+
+
 
 
 
@@ -801,11 +1201,20 @@ function createTravelButtons(){
         };
 
 
+
         update();
 
 
+
         document.body.appendChild(btn);
-        makeDraggable(btn, id + '-pos');
+
+
+
+        makeDraggable(
+            btn,
+            id+"-pos"
+        );
+
 
 
         return btn;
@@ -817,33 +1226,46 @@ function createTravelButtons(){
 
 
 
-    let duckBtn=makeBtn(
-        'mw-duck-btn',
-        '/@/images/obj/dung_prize/duck.png',
-        'mw-duck',
-        (click)=>{
 
-            if(click)
-            {
+
+
+    let duckBtn=makeBtn(
+        "mw-duck-btn",
+        "/@/images/obj/dung_prize/duck.png",
+
+        click=>{
+
+
+            if(click){
+
                 AUTO.duck=!AUTO.duck;
 
+
                 localStorage.setItem(
-                    'mw-duck',
-                    AUTO.duck?'1':'0'
+                    "mw-duck",
+                    AUTO.duck?"1":"0"
                 );
+
             }
 
+
             return AUTO.duck;
+
 
         }
     );
 
 
 
-    if(!localStorage.getItem('mw-duck-btn-pos')){
-    duckBtn.style.left='20px';
-    duckBtn.style.top='100px';
-}
+    if(!localStorage.getItem("mw-duck-btn-pos")){
+
+        duckBtn.style.left="20px";
+        duckBtn.style.top="100px";
+
+    }
+
+
+
 
 
 
@@ -851,32 +1273,175 @@ function createTravelButtons(){
 
 
     let furyBtn=makeBtn(
-        'mw-fury-btn',
-        '/@/images/obj/../ico/ability/fury_2.png',
-        'mw-fury',
-        (click)=>{
+        "mw-fury-btn",
+        "/@/images/obj/../ico/ability/fury_2.png",
 
-            if(click)
-            {
+        click=>{
+
+
+            if(click){
+
                 AUTO.fury=!AUTO.fury;
 
+
                 localStorage.setItem(
-                    'mw-fury',
-                    AUTO.fury?'1':'0'
+                    "mw-fury",
+                    AUTO.fury?"1":"0"
                 );
+
             }
 
+
             return AUTO.fury;
+
 
         }
     );
 
 
 
-    if(!localStorage.getItem('mw-fury-btn-pos')){
-    furyBtn.style.left='110px';
-    furyBtn.style.top='100px';
-}
+    if(!localStorage.getItem("mw-fury-btn-pos")){
+
+        furyBtn.style.left="110px";
+        furyBtn.style.top="100px";
+
+    }
+
+
+
+
+
+
+
+
+
+    // ======================
+    // ШЛЕМ
+    // ======================
+
+
+    let helmetBtn=makeBtn(
+        "mw-helmet-btn",
+        "/@/images/obj/helmet_mf1.png",
+
+        click=>{
+
+
+            if(click){
+
+                AUTO.helmet=!AUTO.helmet;
+
+
+                localStorage.setItem(
+                    "mw-helmet",
+                    AUTO.helmet?"1":"0"
+                );
+
+            }
+
+
+            return AUTO.helmet;
+
+
+        }
+    );
+
+
+
+
+    if(!localStorage.getItem("mw-helmet-btn-pos")){
+
+        helmetBtn.style.left="200px";
+        helmetBtn.style.top="100px";
+
+    }
+
+
+
+
+
+
+
+    // поле количества шлемов
+
+    let input=document.createElement("input");
+
+
+    input.type="number";
+
+    input.min=1;
+
+
+    input.value =
+    localStorage.getItem("mw-helmet-count") || 1;
+
+
+
+
+    input.style.cssText=`
+
+    position:absolute;
+
+    bottom:-25px;
+
+    left:10px;
+
+    width:55px;
+
+    height:20px;
+
+    font-size:14px;
+
+    text-align:center;
+
+    z-index:999999999;
+
+    cursor:text;
+
+    `;
+
+
+
+
+    input.onmousedown=e=>{
+
+        e.stopPropagation();
+
+    };
+
+
+    input.onclick=e=>{
+
+        e.stopPropagation();
+
+    };
+
+
+
+    input.ontouchstart=e=>{
+
+        e.stopPropagation();
+
+    };
+
+
+
+
+    input.onchange=()=>{
+
+
+        localStorage.setItem(
+            "mw-helmet-count",
+            input.value
+        );
+
+
+    };
+
+
+
+    helmetBtn.appendChild(input);
+
 
 
 }
@@ -3329,24 +3894,44 @@ async function throwDuck() {
         return false;
     }
 }
-async function throwHelmet() {
+async function throwHelmet(){
 
-    let helmetId = findItemByImage("helmet_mf1.png");
+    let helmetId =
+        findItemByImage("helmet_mf1.png");
 
-    if (helmetId) {
 
-        console.log(`[AUTO] Found Helmet with ID: ${helmetId}. Using it...`);
+    if(!helmetId){
+
+        helmetId =
+            findItemByImage("helmet.png");
+
+    }
+
+
+    if(helmetId){
+
+        console.log(
+            "[AUTO] Found Helmet ID:",
+            helmetId
+        );
+
 
         let fightUrl = window.location.href;
-        let referrerPath = new URL(fightUrl).pathname;
+
+        let referrerPath =
+            new URL(fightUrl).pathname;
+
 
 
         await fetch(
             new URL(window.location.href).origin + "/fight/",
             {
                 headers:{
-                    "content-type":"application/x-www-form-urlencoded; charset=UTF-8",
-                    "x-requested-with":"XMLHttpRequest"
+                    "content-type":
+                    "application/x-www-form-urlencoded; charset=UTF-8",
+
+                    "x-requested-with":
+                    "XMLHttpRequest"
                 },
 
                 body:
@@ -3361,16 +3946,18 @@ async function throwHelmet() {
 
         await At(0.3);
 
+
         return true;
 
-    } 
-    else {
-
-        console.log("[AUTO] Helmet not found in fight actions.");
-
-        return false;
-
     }
+
+
+    console.log(
+        "[AUTO] Helmet not found"
+    );
+
+
+    return false;
 
 }
     var en = (e, t) => {
@@ -5616,10 +6203,22 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
         console.log("[PVP] Handle group fight.");
 if(AUTO.helmet)
 {
-    for(let i = 0; i < AUTO.helmetCount; i++)
+    let count =
+    Number(
+        localStorage.getItem("mw-helmet-count")
+    ) || 1;
+
+
+    for(let i=0;i<count;i++)
     {
         await throwHelmet();
     }
+}
+
+
+if(AUTO.fury)
+{
+    await z(G.x2NPC);
 }
 if(AUTO.fury)
 {
