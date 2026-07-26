@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.5
+// @version        9.6
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -588,7 +588,7 @@ function createTravelButtons(){
 
     if(location.pathname !== '/travel2/'){
 
-        let panel=document.querySelector('#mw-auto-panel');
+        let panel=document.querySelector("#mw-travel-panel");
 
         if(panel)
             panel.remove();
@@ -598,31 +598,21 @@ function createTravelButtons(){
 
 
 
-    if(document.querySelector('#mw-auto-panel'))
+    if(document.querySelector("#mw-travel-panel"))
         return;
 
 
 
-
-    // ==========================
-    // ПАНЕЛЬ
-    // ==========================
-
     let panel=document.createElement("div");
 
-    panel.id="mw-auto-panel";
+    panel.id="mw-travel-panel";
 
 
-    let saved=localStorage.getItem("mw-auto-panel-pos");
 
-    if(saved){
-
-        let p=JSON.parse(saved);
-
-        panel.style.left=p.left+"px";
-        panel.style.top=p.top+"px";
-
-    }
+    let saved =
+    JSON.parse(
+        localStorage.getItem("mw-travel-panel-pos") || "null"
+    );
 
 
 
@@ -630,13 +620,9 @@ function createTravelButtons(){
 
         position:"fixed",
 
-        left:"20px",
+        left:saved ? saved.left : "20px",
 
-        top:"100px",
-
-        width:"85px",
-
-        zIndex:"2147483647",
+        top:saved ? saved.top : "100px",
 
         display:"flex",
 
@@ -644,10 +630,9 @@ function createTravelButtons(){
 
         gap:"8px",
 
-        alignItems:"center"
+        zIndex:"2147483647"
 
     });
-
 
 
 
@@ -662,29 +647,23 @@ function createTravelButtons(){
 
 
     let drag=false;
-
     let moved=false;
 
     let dx=0;
-
     let dy=0;
 
     let startX=0;
-
     let startY=0;
 
 
 
-
-    function startDrag(x,y){
+    function start(x,y){
 
         drag=true;
-
         moved=false;
 
         startX=x;
         startY=y;
-
 
         dx=x-panel.offsetLeft;
         dy=y-panel.offsetTop;
@@ -693,8 +672,7 @@ function createTravelButtons(){
 
 
 
-
-    function moveDrag(x,y){
+    function move(x,y){
 
         if(!drag)
             return;
@@ -708,16 +686,18 @@ function createTravelButtons(){
 
 
 
-        panel.style.left=(x-dx)+"px";
+        panel.style.left =
+        (x-dx)+"px";
 
-        panel.style.top=(y-dy)+"px";
+
+        panel.style.top =
+        (y-dy)+"px";
 
     }
 
 
 
-
-    function endDrag(){
+    function end(){
 
         if(!drag)
             return;
@@ -727,12 +707,12 @@ function createTravelButtons(){
 
 
         localStorage.setItem(
-            "mw-auto-panel-pos",
+            "mw-travel-panel-pos",
             JSON.stringify({
 
-                left:panel.offsetLeft,
+                left:panel.style.left,
 
-                top:panel.offsetTop
+                top:panel.style.top
 
             })
         );
@@ -742,93 +722,109 @@ function createTravelButtons(){
 
 
 
-
-    panel.addEventListener("mousedown",e=>{
-
-        if(e.target.tagName==="INPUT")
-            return;
+    panel.addEventListener(
+        "mousedown",
+        e=>{
 
 
-        e.preventDefault();
-
-        startDrag(
-            e.clientX,
-            e.clientY
-        );
-
-    });
+            if(e.target.tagName==="INPUT")
+                return;
 
 
+            e.preventDefault();
 
-    document.addEventListener("mousemove",e=>{
 
-        moveDrag(
-            e.clientX,
-            e.clientY
-        );
+            start(
+                e.clientX,
+                e.clientY
+            );
 
-    });
+
+        }
+    );
 
 
 
-    document.addEventListener("mouseup",endDrag);
+    document.addEventListener(
+        "mousemove",
+        e=>{
+
+            move(
+                e.clientX,
+                e.clientY
+            );
+
+        }
+    );
 
 
 
-
-
-
-    panel.addEventListener("touchstart",e=>{
-
-        if(e.target.tagName==="INPUT")
-            return;
-
-
-        let t=e.touches[0];
-
-        startDrag(
-            t.clientX,
-            t.clientY
-        );
-
-
-    },{passive:false});
+    document.addEventListener(
+        "mouseup",
+        end
+    );
 
 
 
 
-    document.addEventListener("touchmove",e=>{
-
-        if(!drag)
-            return;
-
-
-        let t=e.touches[0];
+    panel.addEventListener(
+        "touchstart",
+        e=>{
 
 
-        moveDrag(
-            t.clientX,
-            t.clientY
-        );
+            if(e.target.tagName==="INPUT")
+                return;
 
 
-        e.preventDefault();
+            let t=e.touches[0];
 
 
-    },{passive:false});
+            start(
+                t.clientX,
+                t.clientY
+            );
 
 
-
-    document.addEventListener("touchend",endDrag);
+        },
+        {passive:false}
+    );
 
 
 
+    document.addEventListener(
+        "touchmove",
+        e=>{
+
+
+            if(!drag)
+                return;
+
+
+            let t=e.touches[0];
+
+
+            move(
+                t.clientX,
+                t.clientY
+            );
+
+
+            e.preventDefault();
+
+
+        },
+        {passive:false}
+    );
 
 
 
-    // ==========================
-    // СОЗДАНИЕ КНОПКИ
-    // ==========================
+    document.addEventListener(
+        "touchend",
+        end
+    );
+
+
+
 
 
     function makeBtn(id,img,callback){
@@ -854,87 +850,84 @@ function createTravelButtons(){
 
 
 
-        btn.style.cssText=`
+        Object.assign(btn.style,{
 
-        width:80px;
-        height:80px;
+            width:"80px",
 
-        background:#333;
+            height:"80px",
 
-        border:3px solid #888;
+            background:"#333",
 
-        border-radius:12px;
+            border:"3px solid #888",
 
-        display:flex;
+            borderRadius:"12px",
 
-        align-items:center;
+            display:"flex",
 
-        justify-content:center;
+            alignItems:"center",
 
-        cursor:pointer;
+            justifyContent:"center",
 
-        box-shadow:
-        0 0 5px black,
-        inset 0 0 8px #555;
+            position:"relative",
 
-        position:relative;
+            cursor:"pointer",
 
-        `;
+            boxShadow:
+            "0 0 5px black,inset 0 0 8px #555"
+
+        });
 
 
 
         let span=btn.querySelector("span");
 
 
-        span.style.cssText=`
+        Object.assign(span.style,{
 
-        position:absolute;
+            position:"absolute",
 
-        bottom:2px;
+            bottom:"2px",
 
-        right:4px;
+            right:"4px",
 
-        color:white;
+            color:"white",
 
-        font-size:16px;
+            fontSize:"16px",
 
-        font-weight:bold;
+            fontWeight:"bold"
 
-        `;
+        });
 
 
 
 
         function update(){
 
-            span.textContent=
+            span.textContent =
             callback() ? "" : "OFF";
 
         }
 
 
 
-
         btn.onclick=e=>{
 
-            if(moved){
 
-                moved=false;
-
+            if(moved)
                 return;
-
-            }
 
 
             callback(true);
 
             update();
 
+
         };
 
 
 
         update();
+
 
 
         panel.appendChild(btn);
@@ -949,12 +942,7 @@ function createTravelButtons(){
 
 
 
-    // ==========================
-    // УТКА
-    // ==========================
-
-
-    makeBtn(
+    let duckBtn=makeBtn(
         "mw-duck-btn",
         "/@/images/obj/dung_prize/duck.png",
 
@@ -983,13 +971,7 @@ function createTravelButtons(){
 
 
 
-
-    // ==========================
-    // ЯРОСТЬ
-    // ==========================
-
-
-    makeBtn(
+    let furyBtn=makeBtn(
         "mw-fury-btn",
         "/@/images/obj/../ico/ability/fury_2.png",
 
@@ -1017,12 +999,6 @@ function createTravelButtons(){
 
 
 
-
-
-
-    // ==========================
-    // ШЛЕМ
-    // ==========================
 
 
     let helmetBtn=makeBtn(
@@ -1054,10 +1030,7 @@ function createTravelButtons(){
 
 
 
-    // ==========================
-    // ПОЛЕ КОЛИЧЕСТВА
-    // ==========================
-
+    // поле строго ПОД шлемом
 
     let input=document.createElement("input");
 
@@ -1066,8 +1039,7 @@ function createTravelButtons(){
 
     input.min=1;
 
-
-    input.value=
+    input.value =
     localStorage.getItem("mw-helmet-count") || 1;
 
 
@@ -1076,15 +1048,17 @@ function createTravelButtons(){
 
         position:"absolute",
 
-        bottom:"-25px",
+        left:"12px",
 
-        left:"10px",
+        top:"82px",
 
         width:"55px",
 
         height:"20px",
 
-        zIndex:"999999999"
+        textAlign:"center",
+
+        zIndex:"999999"
 
     });
 
@@ -1092,16 +1066,17 @@ function createTravelButtons(){
 
 
     input.onmousedown=e=>{
-
         e.stopPropagation();
-
     };
 
 
     input.onclick=e=>{
-
         e.stopPropagation();
+    };
 
+
+    input.ontouchstart=e=>{
+        e.stopPropagation();
     };
 
 
@@ -1117,8 +1092,10 @@ function createTravelButtons(){
 
 
 
-    helmetBtn.appendChild(input);
+    helmetBtn.style.marginBottom="25px";
 
+
+    helmetBtn.appendChild(input);
 
 
 
