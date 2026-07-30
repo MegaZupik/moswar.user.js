@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.6
+// @version        9.7
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,55 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+/////удаление алертов
+
+
+(function () {
+    'use strict';
+
+    const done = new WeakSet();
+
+    function scan() {
+
+        document.querySelectorAll("div.alert").forEach(el => {
+
+            if (done.has(el))
+                return;
+
+            // нужен именно второй класс alertN
+            if (![...el.classList].some(c => /^alert\d+$/.test(c)))
+                return;
+
+            done.add(el);
+
+            setTimeout(() => {
+
+                if (!el.isConnected)
+                    return;
+
+                let close = el.querySelector(".close-cross");
+
+                if (close && typeof closeAlert === "function") {
+                    closeAlert(close);
+                } else {
+                    el.remove();
+                }
+
+            }, 1000);
+
+        });
+
+    }
+
+    new MutationObserver(scan).observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    scan();
+
+})();
 
 
 /////проценты в странах для визуала
