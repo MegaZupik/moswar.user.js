@@ -16,53 +16,33 @@
 
 /////удаление алертов
 
-
 (function () {
     'use strict';
 
-    const done = new WeakSet();
+    function work() {
 
-    function scan() {
+        // Работает ТОЛЬКО в Бутово
+        if (location.pathname !== "/butovo/")
+            return;
 
-        document.querySelectorAll("div.alert").forEach(el => {
+        document.querySelectorAll('div.alert[class*="alert"]').forEach(alert => {
 
-            if (done.has(el))
+            if (alert.dataset.autoClosed)
                 return;
 
-            // нужен именно второй класс alertN
-            if (![...el.classList].some(c => /^alert\d+$/.test(c)))
-                return;
-
-            done.add(el);
+            alert.dataset.autoClosed = "1";
 
             setTimeout(() => {
-
-                if (!el.isConnected)
-                    return;
-
-                let close = el.querySelector(".close-cross");
-
-                if (close && typeof closeAlert === "function") {
-                    closeAlert(close);
-                } else {
-                    el.remove();
-                }
-
+                if (alert.isConnected)
+                    alert.remove();
             }, 1000);
-
         });
-
     }
 
-    new MutationObserver(scan).observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-
-    scan();
+    // Проверяем постоянно, т.к. Moswar меняет страницы через AJAX
+    setInterval(work, 300);
 
 })();
-
 
 /////проценты в странах для визуала
 function showCountryPercent() {
