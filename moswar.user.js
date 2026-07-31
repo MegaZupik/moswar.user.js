@@ -16,16 +16,25 @@
 
 /////удаление алертов
 
+// ==UserScript==
+// @name         Moswar Alert Auto Close
+// @match        *://www.moswar.ru/*
+// @grant        none
+// ==/UserScript==
+
 (function () {
     'use strict';
 
     function work() {
 
-        // Работает ТОЛЬКО в Бутово
         if (location.pathname !== "/butovo/")
             return;
 
-        document.querySelectorAll('div.alert[class*="alert"]').forEach(alert => {
+        document.querySelectorAll("div.alert").forEach(alert => {
+
+            // должен быть второй класс alert1, alert2, alert3...
+            if (![...alert.classList].some(c => /^alert\d+$/.test(c)))
+                return;
 
             if (alert.dataset.autoClosed)
                 return;
@@ -34,12 +43,12 @@
 
             setTimeout(() => {
                 if (alert.isConnected)
-                    alert.remove();
+                    closeAlert(alert.querySelector(".close-cross") || alert);
             }, 1000);
+
         });
     }
 
-    // Проверяем постоянно, т.к. Moswar меняет страницы через AJAX
     setInterval(work, 300);
 
 })();
