@@ -14,25 +14,16 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
-/////удаление алертов
-
-// ==UserScript==
-// @name         Moswar Alert Auto Close
-// @match        *://www.moswar.ru/*
-// @grant        none
-// ==/UserScript==
 
 (function () {
     'use strict';
 
+    let timer = null;
+    let lastPath = "";
+
     function work() {
-
-        if (location.pathname !== "/butovo/")
-            return;
-
         document.querySelectorAll("div.alert").forEach(alert => {
 
-            // должен быть второй класс alert1, alert2, alert3...
             if (![...alert.classList].some(c => /^alert\d+$/.test(c)))
                 return;
 
@@ -45,11 +36,26 @@
                 if (alert.isConnected)
                     closeAlert(alert.querySelector(".close-cross") || alert);
             }, 1000);
-
         });
     }
 
-    setInterval(work, 300);
+    setInterval(() => {
+
+        if (location.pathname === lastPath)
+            return;
+
+        lastPath = location.pathname;
+
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
+        }
+
+        if (location.pathname === "/butovo/") {
+            timer = setInterval(work, 300);
+        }
+
+    }, 200);
 
 })();
 
