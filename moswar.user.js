@@ -5934,20 +5934,20 @@ if(AUTO.duck)
 }
         await z(G.roar),
         await z(G.roar),
-        await z(G.secondSelf),
-        await z(G.krovotok),
-        await z(G.vampirism),
-        await z(G.topot),
-        await z(G.mass),
-        await z(G.invincible),
-        await An(10),
+        // await z(G.secondSelf),
+        // await z(G.krovotok),
+        // await z(G.vampirism),
+        // await z(G.topot),
+        // await z(G.mass),
+        // await z(G.invincible),
+        await An(5),
         console.log("[PVP] Group fight handler finished execution."),
         $(document).one("ajaxStop", () => {
             console.log("Finished fight"),
             e &&
             $(document).one(
                 "ajaxStop",
-                setTimeout(() => Worldtour2.startFight(), 1e3)
+                // setTimeout(() => Worldtour2.startFight(), 1e3)
             );
         });
     }
