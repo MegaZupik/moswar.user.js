@@ -5940,7 +5940,7 @@ if(AUTO.duck)
         // await z(G.topot),
         // await z(G.mass),
         // await z(G.invincible),
-        await An(5),
+        await An(10),
         console.log("[PVP] Group fight handler finished execution."),
         $(document).one("ajaxStop", () => {
             console.log("Finished fight"),
