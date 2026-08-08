@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.7
+// @version        9.9
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -14,7 +14,177 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
+//табличка со временем на котором таймер колы
 
+
+(function () {
+    "use strict";
+
+    const TIMER_ID = "moswar-cola-timer";
+
+    function findCola() {
+        const elements = document.querySelectorAll(".help .data .brown");
+
+        for (const el of elements) {
+            const text = el.textContent.trim();
+
+            if (text.includes("Искуственная Кола")) {
+                return text;
+            }
+        }
+
+        return null;
+    }
+
+    function getEndTime(text) {
+        const match = text.match(
+            /до\s+(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})/
+        );
+
+        if (!match) {
+            return null;
+        }
+
+        const day = Number(match[1]);
+        const month = Number(match[2]);
+        const year = Number(match[3]);
+        const hours = Number(match[4]);
+        const minutes = Number(match[5]);
+
+        return new Date(
+            year,
+            month - 1,
+            day,
+            hours,
+            minutes,
+            0
+        ).getTime();
+    }
+
+    function createTimer() {
+        let timer = document.getElementById(TIMER_ID);
+
+        if (timer) {
+            return timer;
+        }
+
+        timer = document.createElement("div");
+        timer.id = TIMER_ID;
+
+        timer.style.cssText = `
+            position: fixed;
+            left: 10px;
+            bottom: 10px;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 9px;
+            background: rgb(255, 227, 179);
+            border: 2px solid rgb(240, 114, 53);
+            border-radius: 8px;
+            color: #000;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            box-sizing: border-box;
+            pointer-events: none;
+        `;
+
+        timer.innerHTML = `
+            <img
+                src="/@/images/obj/eliksir_hp50_ultimate.png"
+                style="
+                    width: 20px;
+                    height: 20px;
+                    object-fit: contain;
+                    display: block;
+                "
+            >
+            <span id="moswar-cola-countdown">--:--:--</span>
+        `;
+
+        document.body.appendChild(timer);
+
+        return timer;
+    }
+
+    function removeTimer() {
+        const timer = document.getElementById(TIMER_ID);
+
+        if (timer) {
+            timer.remove();
+        }
+    }
+
+    function formatTime(ms) {
+        if (ms <= 0) {
+            return "00:00:00";
+        }
+
+        const totalSeconds = Math.floor(ms / 1000);
+
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        return (
+            String(hours).padStart(2, "0") +
+            ":" +
+            String(minutes).padStart(2, "0") +
+            ":" +
+            String(seconds).padStart(2, "0")
+        );
+    }
+
+    function checkCola() {
+        const colaText = findCola();
+
+        if (!colaText) {
+            removeTimer();
+            return;
+        }
+
+        const endTime = getEndTime(colaText);
+
+        if (!endTime) {
+            removeTimer();
+            return;
+        }
+
+        const remaining = endTime - Date.now();
+
+        if (remaining <= 0) {
+            removeTimer();
+            return;
+        }
+
+        const timer = createTimer();
+        const countdown = timer.querySelector("#moswar-cola-countdown");
+
+        if (countdown) {
+            countdown.textContent = formatTime(remaining);
+        }
+    }
+
+    function start() {
+        checkCola();
+
+        setInterval(checkCola, 1000);
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", start, {
+            once: true
+        });
+    } else {
+        start();
+    }
+})();
+
+
+
+/// борьба с алертами вроде как
 (function () {
     'use strict';
 
