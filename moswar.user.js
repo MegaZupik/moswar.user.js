@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        9.9
+// @version        10.0
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,766 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+//покупка ящиков по 10 голосов с омона
+(function () {
+    'use strict';
+
+    const UI_ID = 'mw-chest-controls';
+
+    let lastUrl = location.href;
+
+    console.log('[Box22] Скрипт запущен');
+
+
+    // =========================================================
+    // Проверяем страницу
+    // =========================================================
+
+    function onMeetingsPage() {
+        return location.pathname === '/meetings/' ||
+               location.pathname.startsWith('/meetings/');
+    }
+
+
+    // =========================================================
+    // Один запрос getChest
+    // =========================================================
+
+    function sendChestRequest() {
+
+        return fetch('/meetings/', {
+            method: 'POST',
+            credentials: 'include',
+
+            headers: {
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+
+            body: 'action=getChest&chId=0&__ajax=1&return_url=%2Fmeetings%2F&ajax=1'
+        });
+    }
+
+
+    // =========================================================
+    // Ищем первый span с количеством
+    //
+    // <div class="tip">
+    //     <span>10</span>
+    //     ...
+    // </div>
+    // =========================================================
+
+    function findTipValue() {
+
+        const tip = document.querySelector(
+            '.column.achievement.rich .tip'
+        );
+
+        if (!tip) {
+            return null;
+        }
+
+        return tip.querySelector(':scope > span');
+    }
+
+
+    // =========================================================
+    // Обновляем число награды
+    // =========================================================
+
+    function updateTipValue(input) {
+
+        const tipValue = findTipValue();
+
+        if (!tipValue || !input) {
+            return;
+        }
+
+
+        // Запоминаем исходное значение только один раз
+        if (!tipValue.dataset.baseValue) {
+
+            const originalValue =
+                parseInt(tipValue.textContent.trim(), 10);
+
+            if (!Number.isFinite(originalValue)) {
+                return;
+            }
+
+            tipValue.dataset.baseValue =
+                originalValue;
+        }
+
+
+        let count =
+            parseInt(input.value, 10);
+
+
+        if (!Number.isFinite(count) || count < 1) {
+            count = 1;
+        }
+
+
+        const baseValue =
+            parseInt(tipValue.dataset.baseValue, 10);
+
+
+        tipValue.textContent =
+            baseValue * count;
+    }
+
+
+    // =========================================================
+    // Массовая отправка запросов
+    // =========================================================
+
+    async function executeRequests(
+        count,
+        button,
+        status
+    ) {
+
+        button.disabled = true;
+
+        let success = 0;
+        let errors = 0;
+
+        status.textContent = 'Запуск...';
+
+        console.log(
+            '[Box22] Запускаю запросы:',
+            count
+        );
+
+
+        for (let i = 0; i < count; i++) {
+
+            try {
+
+                const response =
+                    await sendChestRequest();
+
+
+                // Обязательно читаем ответ
+                await response.text();
+
+
+                if (response.ok) {
+                    success++;
+                } else {
+                    errors++;
+                }
+
+            } catch (error) {
+
+                errors++;
+
+                console.error(
+                    '[Box22] Ошибка запроса:',
+                    error
+                );
+            }
+
+
+            status.textContent =
+                `${i + 1}/${count} | ${success}/${count}`;
+        }
+
+
+        button.disabled = false;
+
+
+        console.log(
+            `[Box22] Завершено. Всего: ${count}, OK: ${success}, ERR: ${errors}`
+        );
+
+
+        status.textContent =
+            `Готово: ${success}/${count}`;
+
+
+        updateTipValue(
+            document.getElementById('mw-chest-count')
+        );
+    }
+
+
+    // =========================================================
+    // Создание интерфейса
+    // =========================================================
+
+    function createInterface() {
+
+        if (!onMeetingsPage()) {
+            return;
+        }
+
+
+        if (document.getElementById(UI_ID)) {
+            return;
+        }
+
+
+        const box =
+            document.querySelector('img.box-22');
+
+
+        if (!box) {
+            return;
+        }
+
+
+        console.log(
+            '[Box22] Найден box22'
+        );
+
+
+        // =====================================================
+        // Определяем реальный родительский элемент картинки
+        // =====================================================
+
+        const boxParent =
+            box.parentElement;
+
+
+        if (!boxParent) {
+            return;
+        }
+
+
+        // =====================================================
+        // Делаем родителя позиционируемым
+        //
+        // Сам box22 НЕ перемещаем.
+        // =====================================================
+
+        const oldPosition =
+            getComputedStyle(boxParent).position;
+
+
+        if (
+            oldPosition === 'static'
+        ) {
+            boxParent.style.position =
+                'relative';
+        }
+
+
+        // =====================================================
+        // Панель
+        // =====================================================
+
+        const wrapper =
+            document.createElement('div');
+
+
+        wrapper.id =
+            UI_ID;
+
+
+        wrapper.style.cssText = `
+            display: inline-flex !important;
+
+            flex-direction: row !important;
+
+            align-items: center !important;
+
+            gap: 4px !important;
+
+            height: 30px !important;
+
+            box-sizing: border-box !important;
+
+            padding: 3px 4px !important;
+
+            margin: 0 !important;
+
+            background: #333 !important;
+
+            border: 1px solid #aaa !important;
+
+            border-radius: 6px !important;
+
+            position: absolute !important;
+
+            z-index: 100000 !important;
+
+            box-shadow:
+                0 1px 3px rgba(0, 0, 0, .45) !important;
+
+            white-space: nowrap !important;
+
+            transform: translateY(-50%) !important;
+        `;
+
+
+        // =====================================================
+        // Поле количества
+        // =====================================================
+
+        const input =
+            document.createElement('input');
+
+
+        input.id =
+            'mw-chest-count';
+
+
+        input.type =
+            'number';
+
+
+        input.min =
+            '1';
+
+
+        input.max =
+            '10000';
+
+
+        input.value =
+            '1';
+
+
+        input.title =
+            'Количество ящиков';
+
+
+        input.style.cssText = `
+            width: 38px !important;
+
+            height: 22px !important;
+
+            box-sizing: border-box !important;
+
+            padding: 1px 3px !important;
+
+            margin: 0 !important;
+
+            border: 1px solid #999 !important;
+
+            border-radius: 4px !important;
+
+            background: #fff !important;
+
+            color: #111 !important;
+
+            text-align: center !important;
+
+            font-size: 12px !important;
+
+            outline: none !important;
+        `;
+
+
+        // =====================================================
+        // Кнопка
+        // =====================================================
+
+        const button =
+            document.createElement('button');
+
+
+        button.id =
+            'mw-chest-start';
+
+
+        button.type =
+            'button';
+
+
+        button.textContent =
+            'Купить ящики';
+
+
+        button.title =
+            'Купить указанное количество ящиков';
+
+
+        button.style.cssText = `
+            display: inline-block !important;
+
+            width: auto !important;
+
+            height: 22px !important;
+
+            box-sizing: border-box !important;
+
+            margin: 0 !important;
+
+            padding: 1px 7px !important;
+
+            border: 1px solid #aaa !important;
+
+            border-radius: 4px !important;
+
+            background: #444 !important;
+
+            color: #fff !important;
+
+            font-size: 11px !important;
+
+            line-height: 18px !important;
+
+            cursor: pointer !important;
+
+            white-space: nowrap !important;
+
+            text-shadow:
+                0 1px 1px #000 !important;
+        `;
+
+
+        // =====================================================
+        // Hover
+        // =====================================================
+
+        button.addEventListener(
+            'mouseenter',
+            function () {
+
+                if (!button.disabled) {
+
+                    button.style.background =
+                        '#555';
+                }
+
+            }
+        );
+
+
+        button.addEventListener(
+            'mouseleave',
+            function () {
+
+                button.style.background =
+                    '#444';
+
+            }
+        );
+
+
+        // =====================================================
+        // Статус
+        // =====================================================
+
+        const status =
+            document.createElement('span');
+
+
+        status.id =
+            'mw-chest-status';
+
+
+        status.style.cssText = `
+            color: #fff !important;
+
+            font-size: 10px !important;
+
+            white-space: nowrap !important;
+
+            margin-left: 2px !important;
+        `;
+
+
+        // =====================================================
+        // Изменение количества
+        // =====================================================
+
+        input.addEventListener(
+            'input',
+            function () {
+
+                updateTipValue(input);
+
+            }
+        );
+
+
+        // =====================================================
+        // Кнопка "Купить ящики"
+        // =====================================================
+
+        button.addEventListener(
+            'click',
+            async function (event) {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+
+                const count =
+                    parseInt(
+                        input.value,
+                        10
+                    );
+
+
+                if (
+                    !Number.isFinite(count) ||
+                    count < 1
+                ) {
+
+                    status.textContent =
+                        'Укажи число';
+
+                    return;
+                }
+
+
+                if (count > 10000) {
+
+                    status.textContent =
+                        'Макс. 10000';
+
+                    return;
+                }
+
+
+                await executeRequests(
+                    count,
+                    button,
+                    status
+                );
+
+            },
+            true
+        );
+
+
+        // =====================================================
+        // Собираем панель
+        // =====================================================
+
+        wrapper.appendChild(input);
+
+        wrapper.appendChild(button);
+
+        wrapper.appendChild(status);
+
+
+        // =====================================================
+        // ВАЖНО:
+        //
+        // Панель НЕ вставляется перед box22.
+        //
+        // Она добавляется в родителя картинки,
+        // но сам box22 остаётся абсолютно нетронутым.
+        // =====================================================
+
+        boxParent.appendChild(
+            wrapper
+        );
+
+
+        // =====================================================
+        // Позиционирование относительно box22
+        // =====================================================
+
+        function positionPanel() {
+
+            const boxRect =
+                box.getBoundingClientRect();
+
+            const parentRect =
+                boxParent.getBoundingClientRect();
+
+
+            const panelWidth =
+                wrapper.offsetWidth;
+
+
+            const panelHeight =
+                wrapper.offsetHeight;
+
+
+            // Слева от картинки
+            wrapper.style.left =
+                (
+                    boxRect.left -
+                    parentRect.left -
+                    panelWidth -
+                    6
+                ) + 'px';
+
+
+            // По центру картинки
+            wrapper.style.top =
+                (
+                    boxRect.top -
+                    parentRect.top +
+                    boxRect.height / 2
+                ) + 'px';
+        }
+
+
+        // После отрисовки
+        requestAnimationFrame(
+            positionPanel
+        );
+
+
+        // Если размеры/позиция страницы изменились
+        window.addEventListener(
+            'resize',
+            positionPanel
+        );
+
+
+        // =====================================================
+        // Первоначальное значение
+        // =====================================================
+
+        updateTipValue(input);
+
+
+        console.log(
+            '[Box22] Панель установлена слева от box22'
+        );
+    }
+
+
+    // =========================================================
+    // Проверка страницы
+    // =========================================================
+
+    function checkPage() {
+
+        if (location.href !== lastUrl) {
+
+            console.log(
+                '[Box22] URL изменился:',
+                lastUrl,
+                '->',
+                location.href
+            );
+
+
+            lastUrl =
+                location.href;
+
+
+            const oldUI =
+                document.getElementById(UI_ID);
+
+
+            if (oldUI) {
+                oldUI.remove();
+            }
+        }
+
+
+        createInterface();
+    }
+
+
+    // =========================================================
+    // MutationObserver
+    // =========================================================
+
+    const observer =
+        new MutationObserver(
+            function () {
+                checkPage();
+            }
+        );
+
+
+    observer.observe(
+        document.documentElement,
+        {
+            childList: true,
+            subtree: true
+        }
+    );
+
+
+    // =========================================================
+    // History API
+    // =========================================================
+
+    const originalPushState =
+        history.pushState;
+
+
+    const originalReplaceState =
+        history.replaceState;
+
+
+    history.pushState =
+        function () {
+
+            const result =
+                originalPushState.apply(
+                    this,
+                    arguments
+                );
+
+
+            setTimeout(
+                checkPage,
+                50
+            );
+
+
+            return result;
+        };
+
+
+    history.replaceState =
+        function () {
+
+            const result =
+                originalReplaceState.apply(
+                    this,
+                    arguments
+                );
+
+
+            setTimeout(
+                checkPage,
+                50
+            );
+
+
+            return result;
+        };
+
+
+    window.addEventListener(
+        'popstate',
+        function () {
+
+            setTimeout(
+                checkPage,
+                50
+            );
+
+        }
+    );
+
+
+    // =========================================================
+    // Периодическая проверка
+    // =========================================================
+
+    setInterval(
+        checkPage,
+        500
+    );
+
+
+    // =========================================================
+    // Первая проверка
+    // =========================================================
+
+    checkPage();
+
+})();
+
 
 //табличка со временем на котором таймер колы
 
