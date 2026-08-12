@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        10.0
+// @version        10.1
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -14,11 +14,12 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
-//покупка ящиков по 10 голосов с омона
+
 (function () {
     'use strict';
 
     const UI_ID = 'mw-chest-controls';
+    const REQUEST_DELAY = 20;
 
     let lastUrl = location.href;
 
@@ -36,7 +37,18 @@
 
 
     // =========================================================
+    // Задержка
+    // =========================================================
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+
+    // =========================================================
     // Один запрос getChest
+    //
+    // Ответ НЕ читаем и НЕ проверяем.
     // =========================================================
 
     function sendChestRequest() {
@@ -53,6 +65,7 @@
 
             body: 'action=getChest&chId=0&__ajax=1&return_url=%2Fmeetings%2F&ajax=1'
         });
+
     }
 
 
@@ -126,7 +139,13 @@
 
 
     // =========================================================
-    // Массовая отправка запросов
+    // Массовая отправка
+    //
+    // Запросы:
+    //
+    // 1 -> 20 мс -> 2 -> 20 мс -> 3 ...
+    //
+    // Ответы вообще не читаются.
     // =========================================================
 
     async function executeRequests(
@@ -136,9 +155,6 @@
     ) {
 
         button.disabled = true;
-
-        let success = 0;
-        let errors = 0;
 
         status.textContent = 'Запуск...';
 
@@ -152,46 +168,43 @@
 
             try {
 
-                const response =
-                    await sendChestRequest();
-
-
-                // Обязательно читаем ответ
-                await response.text();
-
-
-                if (response.ok) {
-                    success++;
-                } else {
-                    errors++;
-                }
+                // Отправляем запрос
+                sendChestRequest();
 
             } catch (error) {
 
-                errors++;
-
+                // Ошибку fetch не останавливаем,
+                // просто идём дальше
                 console.error(
-                    '[Box22] Ошибка запроса:',
+                    '[Box22] Ошибка отправки:',
                     error
                 );
             }
 
 
+            // Показываем только прогресс,
+            // никакой проверки ответа нет
             status.textContent =
-                `${i + 1}/${count} | ${success}/${count}`;
+                `${i + 1}/${count}`;
+
+
+            // 20 мс до следующего запроса
+            if (i < count - 1) {
+                await sleep(REQUEST_DELAY);
+            }
         }
 
 
         button.disabled = false;
 
 
-        console.log(
-            `[Box22] Завершено. Всего: ${count}, OK: ${success}, ERR: ${errors}`
-        );
-
-
         status.textContent =
-            `Готово: ${success}/${count}`;
+            `Готово: ${count}`;
+
+
+        console.log(
+            `[Box22] Завершено: ${count} запросов`
+        );
 
 
         updateTipValue(
@@ -231,7 +244,7 @@
 
 
         // =====================================================
-        // Определяем реальный родительский элемент картинки
+        // Родитель картинки
         // =====================================================
 
         const boxParent =
@@ -243,19 +256,12 @@
         }
 
 
-        // =====================================================
-        // Делаем родителя позиционируемым
-        //
-        // Сам box22 НЕ перемещаем.
-        // =====================================================
-
+        // Делаем родителя точкой отсчёта
         const oldPosition =
             getComputedStyle(boxParent).position;
 
 
-        if (
-            oldPosition === 'static'
-        ) {
+        if (oldPosition === 'static') {
             boxParent.style.position =
                 'relative';
         }
@@ -435,9 +441,7 @@
             function () {
 
                 if (!button.disabled) {
-
-                    button.style.background =
-                        '#555';
+                    button.style.background = '#555';
                 }
 
             }
@@ -448,8 +452,7 @@
             'mouseleave',
             function () {
 
-                button.style.background =
-                    '#444';
+                button.style.background = '#444';
 
             }
         );
@@ -555,12 +558,8 @@
 
 
         // =====================================================
-        // ВАЖНО:
-        //
-        // Панель НЕ вставляется перед box22.
-        //
-        // Она добавляется в родителя картинки,
-        // но сам box22 остаётся абсолютно нетронутым.
+        // Добавляем панель в родителя box22
+        // Сам box22 НЕ перемещаем
         // =====================================================
 
         boxParent.appendChild(
@@ -569,7 +568,7 @@
 
 
         // =====================================================
-        // Позиционирование относительно box22
+        // Позиционируем панель слева от картинки
         // =====================================================
 
         function positionPanel() {
@@ -585,11 +584,7 @@
                 wrapper.offsetWidth;
 
 
-            const panelHeight =
-                wrapper.offsetHeight;
-
-
-            // Слева от картинки
+            // Слева от box22
             wrapper.style.left =
                 (
                     boxRect.left -
@@ -599,7 +594,7 @@
                 ) + 'px';
 
 
-            // По центру картинки
+            // По центру высоты box22
             wrapper.style.top =
                 (
                     boxRect.top -
@@ -609,13 +604,11 @@
         }
 
 
-        // После отрисовки
         requestAnimationFrame(
             positionPanel
         );
 
 
-        // Если размеры/позиция страницы изменились
         window.addEventListener(
             'resize',
             positionPanel
