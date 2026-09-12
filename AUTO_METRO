@@ -1,0 +1,614 @@
+// ==UserScript==
+// @name         MosWar Fight METRO
+// @namespace    https://www.moswar.ru/
+// @version      3.0
+// @description  Авто бой: действия определяются по номеру хода в логе
+// @match        https://www.moswar.ru/*
+// @grant        none
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+
+    const ACTIONS = [
+         435, // великий
+         435, // великий
+        -310, // Рык
+    ];
+
+
+    const HP_ITEMS = [
+        "/@/images/obj/gifts2026/coconut.png",
+        "/@/images/obj/gifts2026/durian.png"
+    ];
+
+
+    let turnProcessing = false;
+
+
+    /*
+     * ============================================================
+     * ОПРЕДЕЛЯЕМ ТЕКУЩИЙ ХОД ПО ТЕКСТУ "Ход N"
+     * ============================================================
+     *
+     * Например:
+     *
+     * <h4><b>Ход 25</b></h4>
+     *
+     * Возвращаем:
+     *
+     * 25
+     *
+     * Никакого actionIndex/sessionStorage больше нет.
+     */
+
+   function getCurrentTurn() {
+
+    const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT
+    );
+
+    let maxTurn = null;
+    let fightStarted = false;
+
+    while (walker.nextNode()) {
+
+        const text = walker.currentNode.textContent.trim();
+
+        // Начало боя = первый ход
+        if (/^Начало$/i.test(text)) {
+            fightStarted = true;
+        }
+
+        // Ищем "Ход N"
+        const match = text.match(/^Ход\s+(\d+)$/i);
+
+        if (!match) {
+            continue;
+        }
+
+        const turn = Number(match[1]);
+
+        if (maxTurn === null || turn > maxTurn) {
+            maxTurn = turn;
+        }
+    }
+
+
+    // Если уже появился "Ход N" —
+    // используем его
+    if (maxTurn !== null) {
+
+        console.log(
+            "[TURN] ✅ Найден ход:",
+            maxTurn
+        );
+
+        return maxTurn;
+    }
+
+
+    // Если "Ход N" ещё нет, но есть "Начало боя" —
+    // это первый ход
+    if (fightStarted) {
+
+        console.log(
+            "[TURN] ✅ Начало боя → Ход 1"
+        );
+
+        return 1;
+    }
+
+
+    console.log(
+        "[TURN] ❌ Ход не найден и бой ещё не начался"
+    );
+
+    return null;
+}
+
+
+    function sleep(ms) {
+
+        return new Promise(resolve => setTimeout(resolve, ms));
+
+    }
+
+
+    function getFightId() {
+
+        const match = window.location.href.match(/fight\/(\d+)/);
+
+        return match ? match[1] : null;
+
+    }
+
+
+    function checkNewFight() {
+
+        const newFightId = getFightId();
+
+        const oldFightId =
+            sessionStorage.getItem("moswar_fight_id");
+
+
+        if (!newFightId) {
+            return;
+        }
+
+
+        if (oldFightId !== newFightId) {
+
+            console.log(
+                "[AUTO] Новый бой:",
+                oldFightId,
+                "→",
+                newFightId
+            );
+
+
+            sessionStorage.setItem(
+                "moswar_fight_id",
+                newFightId
+            );
+
+        }
+
+    }
+
+
+    async function useAbility(abilityId) {
+
+        console.log(
+            "[AUTO] Используем способность:",
+            abilityId
+        );
+
+
+        await fetch(
+            new URL(window.location.href).origin + "/fight/",
+            {
+                headers: {
+                    "content-type":
+                        "application/x-www-form-urlencoded; charset=UTF-8"
+                },
+
+                body:
+                    `action=useabl&json=1&target=${abilityId}`,
+
+                method: "POST",
+
+                credentials: "include"
+            }
+        );
+
+    }
+
+
+    async function useFightItem(imageSrc) {
+
+        const img = document.querySelector(
+            `img[src="${imageSrc}"]`
+        );
+
+
+        if (!img) {
+
+            console.log(
+                "[ITEM] Не найден:",
+                imageSrc,
+                "Делаем обычную атаку"
+            );
+
+
+            const button =
+                document.querySelector("#fight-button-text");
+
+
+            if (button) {
+
+                button.click();
+
+
+                console.log(
+                    "[AUTO] Обычная атака выполнена"
+                );
+
+
+                return true;
+            }
+
+
+            console.log(
+                "[AUTO] Кнопка атаки не найдена"
+            );
+
+
+            return false;
+        }
+
+
+        const label = img.closest("label");
+
+
+        if (!label) {
+
+            console.log(
+                "[ITEM] Label не найден"
+            );
+
+            return false;
+        }
+
+
+        const radio = label.querySelector(
+            'input[type="radio"]'
+        );
+
+
+        if (!radio) {
+
+            console.log(
+                "[ITEM] Radio не найден"
+            );
+
+            return false;
+        }
+
+
+        await sleep(2000);
+
+
+        radio.click();
+
+
+        console.log(
+            "[ITEM] Выбран:",
+            imageSrc
+        );
+
+
+        await sleep(500);
+
+
+        groupFightMakeStep();
+
+
+        return true;
+
+    }
+
+
+    async function useNut() {
+
+        console.log(
+            "[AUTO] HP низкое, ищем хилку"
+        );
+
+
+        for (const item of HP_ITEMS) {
+
+            const img = document.querySelector(
+                `img[src="${item}"]`
+            );
+
+
+            if (img) {
+
+                console.log(
+                    "[AUTO] Найден предмет:",
+                    item
+                );
+
+
+                return await useFightItem(item);
+
+            }
+
+        }
+
+
+        console.log(
+            "[AUTO] Нет ни ореха, ни дуриана"
+        );
+
+
+        return false;
+
+    }
+
+
+    function getMyHPPercent() {
+
+        const hp = document.querySelector(
+            "li.me.alive .life .bar .percent"
+        );
+
+
+        if (!hp) {
+
+            console.log(
+                "[HP] Не найдена моя полоска HP"
+            );
+
+
+            return null;
+        }
+
+
+        return parseInt(hp.style.width) || 0;
+
+    }
+
+
+    async function makeTurn() {
+
+        checkNewFight();
+
+
+        if (turnProcessing) {
+
+            console.log(
+                "[AUTO] Ход уже выполняется"
+            );
+
+            return;
+        }
+
+
+        turnProcessing = true;
+
+
+        console.log(
+            "[AUTO] Проверка хода"
+        );
+
+
+        /*
+         * ========================================================
+         * САМОЕ ГЛАВНОЕ:
+         *
+         * Берём номер хода непосредственно из HTML.
+         * Ход 1 = ACTIONS[0]
+         * Ход 2 = ACTIONS[1]
+         * Ход 25 = ACTIONS[24]
+         * ========================================================
+         */
+
+        const currentTurn = getCurrentTurn();
+
+
+        if (currentTurn === null) {
+
+            console.log(
+                "[AUTO] Номер хода не найден"
+            );
+
+
+            turnProcessing = false;
+
+            return;
+        }
+
+
+        const actionIndex = currentTurn - 1;
+
+
+        console.log(
+            "[AUTO] Ход:",
+            currentTurn,
+            "→ индекс ACTIONS:",
+            actionIndex
+        );
+
+
+        const hp = getMyHPPercent();
+
+
+        if (hp === null) {
+
+            console.log(
+                "[AUTO] HP нет, завершаем"
+            );
+
+
+            turnProcessing = false;
+
+            return;
+        }
+
+
+        console.log(
+            "[HP]",
+            hp + "%"
+        );
+
+
+        /*
+         * ========================================================
+         * ХИЛКА
+         *
+         * Она по-прежнему ВНЕ очереди ACTIONS.
+         * Использование ореха НЕ сдвигает номер основного действия.
+         * ========================================================
+         */
+
+        if (hp < 60) {
+
+            console.log(
+                "[AUTO] HP меньше 60%, используем хилку"
+            );
+
+
+            const nutUsed = await useNut();
+
+
+            if (nutUsed) {
+
+                console.log(
+                    "[AUTO] Ход с хилкой выполнен"
+                );
+
+
+                turnProcessing = false;
+
+                return;
+            }
+
+        }
+
+
+        /*
+         * ========================================================
+         * ПРОВЕРЯЕМ, ЕСТЬ ЛИ ДЕЙСТВИЕ ДЛЯ ЭТОГО ХОДА
+         * ========================================================
+         */
+
+        if (
+            actionIndex < 0 ||
+            actionIndex >= ACTIONS.length
+        ) {
+
+            console.log(
+                "[AUTO] Для хода",
+                currentTurn,
+                "действия в ACTIONS нет"
+            );
+
+
+            turnProcessing = false;
+
+            return;
+        }
+
+
+        const action = ACTIONS[actionIndex];
+
+
+        console.log(
+            "[AUTO] Ход",
+            currentTurn,
+            "→ действие:",
+            action
+        );
+
+
+        let success = false;
+
+
+        if (typeof action === "number") {
+
+            await useAbility(action);
+
+
+            await sleep(2000);
+
+
+            groupFightMakeStep();
+
+
+            success = true;
+
+        }
+
+
+        else if (typeof action === "string") {
+
+            success = await useFightItem(action);
+
+        }
+
+
+        if (success) {
+
+            console.log(
+                "[AUTO] Действие для хода",
+                currentTurn,
+                "выполнено"
+            );
+
+
+            turnProcessing = false;
+
+            return;
+        }
+
+
+        console.log(
+            "[AUTO] Действие не выполнено"
+        );
+
+
+        turnProcessing = false;
+
+    }
+
+
+    function watchMyTurn() {
+
+        checkNewFight();
+
+
+        const observer =
+            new MutationObserver(() => {
+
+
+                if (turnProcessing) {
+                    return;
+                }
+
+
+                const button =
+                    document.querySelector(
+                        "#fight-button-text"
+                    );
+
+
+                if (!button) {
+                    return;
+                }
+
+
+                const waiting =
+                    document.querySelector(
+                        "#fightAction .waiting"
+                    );
+
+
+                if (
+                    waiting &&
+                    waiting.style.display !== "none"
+                ) {
+
+                    return;
+                }
+
+
+                makeTurn();
+
+            });
+
+
+        observer.observe(
+            document.body,
+            {
+                childList: true,
+                subtree: true
+            }
+        );
+
+
+        console.log(
+            "[AUTO] Автобой запущен"
+        );
+
+    }
+
+
+    watchMyTurn();
+
+
+})();
