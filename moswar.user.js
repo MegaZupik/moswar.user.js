@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        10.2
+// @version        10.3
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -1053,7 +1053,7 @@ setInterval(showCountryPercent, 500);
     };
 
     // максимально допустимое значение награды по диапазонам (больше ввести нельзя)
-    const RANGE_MAX = { r1: 8, r10: 12, r16: 18, r21: 24 };
+    const RANGE_MAX = { r1: 100, r10: 100, r16: 100, r21: 100 };
 
     let cfg = loadCfg();
     let isRunning = false;
@@ -1101,21 +1101,49 @@ setInterval(showCountryPercent, 500);
         return null;
     }
     const getTrackButton = () => document.querySelector('[onclick*="metroTrackRat"]');
-    const getFightButton = () => document.querySelector('[onclick*="metroFightRat"]');
+   const getFightButton = () => {
+    // Старый вариант — если у кнопки есть onclick
+    const old = document.querySelector('[onclick*="metroFightRat"]');
+    if (old) return old;
+
+    // Новый вариант — кнопка без onclick, ищем по тексту
+    for (const btn of document.querySelectorAll('button.button')) {
+        const text = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+
+        if (text.includes('Напасть на монстра')) {
+            return btn;
+        }
+    }
+
+    return null;
+};
     const getLeaveButton = () => document.querySelector('[onclick*="metroLeaveFightRat"]');
 
     // количество нужной награды у текущей крысомахи (0, если её нет)
     function getRewardCount() {
-        for (const obj of document.querySelectorAll('.object-thumb')) {
-            const img = obj.querySelector('img');
-            if (!img || (img.getAttribute('src') || '') !== REWARD_IMG) continue;
-            const c = obj.querySelector('.count');
-            if (!c) continue;
-            const n = parseInt((c.textContent || '').replace(/[^\d]/g, ''), 10);
-            return isNaN(n) ? 0 : n;
-        }
-        return 0;
+
+    // Старые типы наград
+    for (const obj of document.querySelectorAll('.object-thumb')) {
+        const img = obj.querySelector('img');
+        if (!img || (img.getAttribute('src') || '') !== REWARD_IMG) continue;
+
+        const c = obj.querySelector('.count');
+        if (!c) continue;
+
+        const n = parseInt((c.textContent || '').replace(/[^\d]/g, ''), 10);
+        return isNaN(n) ? 0 : n;
     }
+
+    // Новый тип Крысомахи — "до XX за спуск"
+    const coupon = document.querySelector('.metro-sparkles-block .coupon');
+
+    if (coupon) {
+        const n = parseInt((coupon.textContent || '').replace(/[^\d]/g, ''), 10);
+        return isNaN(n) ? 0 : n;
+    }
+
+    return 0;
+}
 
     // ============================================================
     //  ХЕЛПЕРЫ
@@ -6296,14 +6324,14 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
       return a.append(s, $(c)), a;
     }
     var re = [
-        160, 64, 48, 165, 46, 167, 40, 221, 211, 197, 56, 50, 122, 215, 47,
+        160,198, 64, 48, 165, 46, 167, 40, 221, 211, 197, 56, 50, 122, 215, 47,
         110, 115, 220, 196, 133, 87, 222, 179, 161,
       ],
       yt = [155, 97, 93, 190, 121, 158],
       Y = [
         192, 158, 190, 223, 121, 93, 97, 135, 155, 182, 178, 195, 219, 59, 216,
         212, 183, 173, 159, 156, 149, 146, 134, 119, 111, 95, 88, 84, 78, 74,
-        69, 68, 65, 58, 55, 54, 52, 51, 49, 44, 38, 36, 35,198,158,233,234,
+        69, 68, 65, 58, 55, 54, 52, 51, 49, 44, 38, 36, 35,158,233,234,
       ],
       Ne = [141, 19, 85, 174, 175, 176, 166, 177, 61, 187, 188, 33],
       bn = [
@@ -6778,6 +6806,7 @@ Level is too high or too low (${minLvl}-${maxLvl}). Retrying...`
         vampirism: 540,
         invincible: 541,
         mass: 543,
+        velikiy: 435,
       };
 
     async function kt() {
@@ -8452,8 +8481,8 @@ if(AUTO.duck)
           text: "\u{1F9E9} \u0420\u0435\u043B\u0438\u043A\u0442\u044B",
         },
         {
-          href: "/camp/gypsy/",
-          text: "\u2728 \u0426\u044B\u0433\u0430\u043D\u043A\u0430",
+          href: "/labubu/",
+          text: "\u2728 Лабубу",
         },
         {
           href: "/berezka/section/mixed/",
