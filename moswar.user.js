@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        10.4
+// @version        10.5
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -14,6 +14,676 @@
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
+
+// СКРИПТ НА НЕФТЕПРОВОД
+(function () {
+    'use strict';
+
+    const W = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+    const $ = W.jQuery;
+    if (!$) return;
+
+    // ============================================================
+    //  КОНСТАНТЫ
+    // ============================================================
+    const COST_ESCAPE = 15;      // «Другой патруль»
+    const COST_ATTACK = 30;      // «Напасть»
+    const COST_SKIP_WAIT = 20;   // «Выполнить мгновенно» (ожидание квеста без Лабубы)
+    const RESET_TYPE_BILET = 2;  // сброс за партбилет. type 1 — мёд, НЕ ИСПОЛЬЗУЕМ
+    const RESET_COST = 10;       // партбилетов за один сброс (-40 подозрительности)
+
+    const REROLL_DELAY = 700;    // пауза между «Другой патруль» (игра 0.6 сек анимирует смену награды)
+    const DUEL_DELAY   = 1300;   // сколько показываем страницу дуэли перед возвратом на трубу
+    const QUEST_DELAY  = 800;    // пауза между действиями квеста (видно кубики)
+    const NEXT_DELAY   = 1500;   // пауза после выхода из квеста (игра рисует галочку и следующий вентиль)
+    const POLL_STEP    = 150;    // шаг опроса DOM
+    const POLL_TIMEOUT = 9000;   // максимум ждать страницу нефтепровода
+    const MAX_REROLLS  = 200;    // предохранитель перебора на одном шаге
+    const SAME_STEP_STOP = 3;    // стоп, если шаг не растёт N нападений подряд (проигрыши)
+    const FIGHT_STUCK_STOP = 8;  // стоп, если не удаётся выйти из боя
+    const GROUP_FIGHT_TIMEOUT = 120000; // максимум ждём окончания группового боя
+    const COOLDOWN_TRIES = 60;   // «слишком часто»: ждём по 5 сек, максимум 5 минут
+    const WEAK_TRIES   = 5;      // «слишком слабы»: лечимся и повторяем, максимум N раз подряд
+    const WEAK_DELAY   = 2000;   // пауза после лечения перед повтором
+
+    const LS_CFG = 'mw_neftsearch_cfg_v1';
+
+    // Диапазоны шагов → порог «≥»: r1=1-7, r8=8-14, r16=15-22, r23=23-29, boss=30
+    // (максимум игры по наблюдениям = floor(step / 7.5) + 2; на 30-м — отдельный, 18)
+    const DEFAULT_CFG = {
+        modeLabubu: false,   // Проходить с активной Лабубой
+        modeBilet: false,    // Проходить за партбилеты
+        ranges: { r1: 0, r8: 0, r16: 0, r23: 0, boss: 0 },
+        // Пороги для акции Х2 — у неё свои диапазоны вентилей и свои максимумы (сняты на боевом сервере):
+        // x1=1-7, x8=8, x9=9-14, x15=15-18, x19=19-22, x23=23-29, xboss=30.
+        // Вентили 19 и 22 на бою не наблюдались — отнесены к группе 20-21; порог всё равно режется максимумом игры.
+        x2: { x1: 0, x8: 0, x9: 0, x15: 0, x19: 0, x23: 0, xboss: 0 }
+    };
+
+    // максимально возможная награда по диапазонам (больше ввести нельзя)
+    const RANGE_MAX = { r1: 2, r8: 3, r16: 4, r23: 5, boss: 18 };
+    const RANGE_KEYS = Object.keys(RANGE_MAX);
+    const X2_MAX = { x1: 3, x8: 4, x9: 8, x15: 10, x19: 15, x23: 21, xboss: 56 };
+    const X2_KEYS = Object.keys(X2_MAX);
+    const FIELD_MAX = Object.assign({}, RANGE_MAX, X2_MAX);   // id поля «mw-ns-<ключ>» → максимум ввода
+
+    let cfg = loadCfg();
+    let isRunning = false;
+    let panelCollapsed = true;   // панель свёрнута по умолчанию на каждой загрузке
+    let statusText = '';
+    let observer = null;
+
+    // ============================================================
+    //  ХРАНИЛИЩЕ
+    // ============================================================
+    function loadCfg() {
+        try {
+            const raw = localStorage.getItem(LS_CFG);
+            if (raw) {
+                const c = Object.assign({}, DEFAULT_CFG, JSON.parse(raw));
+                c.ranges = Object.assign({}, DEFAULT_CFG.ranges, c.ranges || {});
+                c.x2 = Object.assign({}, DEFAULT_CFG.x2, c.x2 || {});
+                return c;
+            }
+        } catch (e) {}
+        return JSON.parse(JSON.stringify(DEFAULT_CFG));
+    }
+    function saveCfg() { try { localStorage.setItem(LS_CFG, JSON.stringify(cfg)); } catch (e) {} }
+
+    function thresholdForStep(step, typeStep) {
+        if (typeStep === 'b' || step >= 30) return cfg.ranges.boss;
+        if (step >= 23) return cfg.ranges.r23;
+        if (step >= 15) return cfg.ranges.r16;   // 15-22 (ключ r16 исторический: 15-й вентиль тоже даёт до 4)
+        if (step >= 8) return cfg.ranges.r8;     // 8-14
+        return cfg.ranges.r1; // 1-7
+    }
+
+    function thresholdX2ForStep(step, typeStep) {
+        const x = cfg.x2;
+        if (typeStep === 'b' || step >= 30) return x.xboss;
+        if (step >= 23) return x.x23;   // 23-29
+        if (step >= 19) return x.x19;   // 19-22
+        if (step >= 15) return x.x15;   // 15-18
+        if (step >= 9) return x.x9;     // 9-14
+        if (step >= 8) return x.x8;     // 8
+        return x.x1;                    // 1-7
+    }
+
+    // Обычный максимум игры для вентиля. Если игра называет больше — идёт акция Х2, берём пороги из колонки Х2.
+    const normalMaxForStep = (step, typeStep) => (typeStep === 'b' || step >= 30) ? RANGE_MAX.boss : Math.floor(step / 7.5) + 2;
+
+    // ============================================================
+    //  ХЕЛПЕРЫ
+    // ============================================================
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    function log(msg) { console.log('[NeftSearch] ' + msg); }
+    const onNeft = () => /^\/neftlenin\//.test(location.pathname);
+    const plain = s => String(s == null ? '' : s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const isSuspError = r => /подозрительност/i.test(plain(r && r.error));
+    const isTooOften = r => /слишком часто/i.test(plain(r && (r.error || r.alertbox)));
+    const isWeak = r => /слишком слаб/i.test(plain(r && (r.error || r.alertbox)));
+    const isGroupFightUrl = url => /^\/fight\/\d+/.test(String(url || ''));
+
+    async function waitFor(fn, timeout, interval) {
+        const t0 = Date.now();
+        while (Date.now() - t0 < (timeout || POLL_TIMEOUT)) { const v = fn(); if (v) return v; await sleep(interval || POLL_STEP); }
+        return null;
+    }
+
+    // прямой запрос к игре, мимо её кнопок: POST /neftlenin/ ajax=1&action=...
+    function api(action, extra) {
+        return new Promise(resolve => {
+            $.post('/neftlenin/', Object.assign({ ajax: 1, action: action }, extra || {}), null, 'json')
+                .done(d => resolve(d || {}))
+                .fail(() => resolve({ result: 0, error: 'нет ответа от игры' }));
+        });
+    }
+
+    // тихий запрос состояния (ничего не меняет в игре)
+    const getState = () => api('getTimer');
+
+    // Вызвать функцию самой игры (NeftLenin.<name>) и дождаться её запроса.
+    // Игра сама рисует результат — окно награды, кубики, шкалу подозрительности, переход в бой.
+    // Возвращает JSON-ответ запроса; null — функция запрос не отправила (например, кнопки заблокированы).
+    async function gameCall(name, arg) {
+        const N = W.NeftLenin;
+        if (!N || typeof N[name] !== 'function') return { result: 0, error: 'в игре нет функции ' + name };
+        let jq = null, settle = null;
+        const answer = new Promise(resolve => { settle = resolve; });
+        const orig = $.post;
+        // Ответ забираем в обёртке над колбэком игры, а не через .done(): колбэк игры иногда падает
+        // (viewMission после preMission с Лабубой — «Cannot read properties of undefined»), и тогда
+        // jQuery обрывает цепочку — .done() не вызвался бы никогда, а цикл завис бы на этом месте.
+        $.post = function (url, data, cb, type) {
+            const wrapped = (typeof cb !== 'function') ? cb : function (d) {
+                try { return cb.apply(this, arguments); }
+                catch (e) { log('⚠️ ошибка в коде игры (' + name + '): ' + e.message); }
+                finally { settle(d || {}); }
+            };
+            jq = orig.call(this, url, data, wrapped, type);
+            return jq;
+        };
+        try { N[name](arg); }
+        catch (e) { return { result: 0, error: e.message }; }
+        finally { $.post = orig; }
+        if (!jq) return null;
+        jq.done(d => settle(d || {})).fail(() => settle({ result: 0, error: 'нет ответа от игры' }));
+        return answer;
+    }
+
+    // страница нефтепровода открыта и отрисована
+    const neftReady = () => onNeft() && !!document.querySelector('#content .pipeline-actions') && !!W.NeftLenin;
+    async function waitNeftReady() { const ok = await waitFor(neftReady); await sleep(400); return !!ok; }
+    async function ensureNeftPage() {
+        if (neftReady()) return true;
+        goNeft('/neftlenin/');
+        return waitNeftReady();
+    }
+
+    // Акционные ресурсы, которые умеем собирать: класс из eventNeftlenin.class → имена картинок награды.
+    // искры — sparkles.png, пули — bullets.png / bullet.png, снежинки — snowflake.png (все лежат в /@/images/obj/).
+    const REWARD_FILES = {
+        sparkles:  ['sparkles'],
+        bullet:    ['bullets', 'bullet'],
+        bullets:   ['bullets', 'bullet'],
+        snowflake: ['snowflake']
+    };
+    const ALL_REWARD_FILES = ['sparkles', 'bullets', 'bullet', 'snowflake'];
+
+    // количество акционного ресурса в награде патруля (0, если его нет)
+    function rewardCount(html, cls) {
+        const stem = String(cls || '').toLowerCase();
+        // незнакомый или пустой класс — ищем любой из известных ресурсов (акционный в награде всегда один)
+        const files = REWARD_FILES[stem] || ALL_REWARD_FILES;
+        let best = 0;
+        $('<div>').html(html || '').find('.object-thumb').each(function () {
+            const file = String($(this).find('img').attr('src') || '').split('?')[0].split('/').pop().toLowerCase().replace(/\.\w+$/, '');
+            const known = files.indexOf(file) !== -1;
+            const byName = !!stem && !!file && (file.indexOf(stem) === 0 || stem.indexOf(file) === 0);
+            if (!known && !byName) return;
+            const n = parseInt($(this).find('.count').text().replace(/[^\d]/g, ''), 10) || 1;
+            if (n > best) best = n;
+        });
+        return best;
+    }
+
+    function gameAlert(title, text) {
+        try { if (typeof W.showAlert === 'function') { W.showAlert(title, text); return; } } catch (e) {}
+        alert(title + '\n' + text);
+    }
+
+    function goNeft(path) {
+        try { W.AngryAjax.goToUrl(path || '/neftlenin/'); } catch (e) { location.href = path || '/neftlenin/'; }
+    }
+
+    // лечимся перед боем, чтобы не словить «Вы слишком слабы» (как в Крысах)
+    async function restoreHP() {
+        const body = new FormData();
+        body.append('action', 'restorehp');
+        await fetch('/player/restorehp/', { body, method: 'POST', mode: 'cors', credentials: 'include' });
+    }
+
+    // игра ответила «слишком слабы» — лечимся ещё раз и даём ей время перед повтором
+    async function healAndWait() {
+        try { await restoreHP(); } catch (e) {}
+        await sleep(WEAK_DELAY);
+    }
+
+    // групповой бой: частые POST attack решают бой на сервере, без таймеров хода (как в Крысах)
+    async function makeTurn(count) {
+        for (let i = 0; i < count; i++) {
+            const res = await fetch('/fight/', {
+                headers: { accept: '*/*', 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8', 'x-requested-with': 'XMLHttpRequest' },
+                body: 'action=attack&json=1', method: 'POST', mode: 'cors', credentials: 'include'
+            });
+            const data = JSON.parse(await res.text());
+            if (data.result === 0) break; // бой завершён
+        }
+    }
+
+    // после группового боя игра держит персонажа «в бою», пока не перейдёшь по «В нефтепровод им. Ленина»
+    // Бой идёт своим чередом (ход — до 10 секунд), пользователь видит страницу боя. Когда бой закончен,
+    // на ней появляется кнопка «В нефтепровод им. Ленина» — тогда и уходим. Раньше уходить бесполезно:
+    // игра сразу возвращает с /neftlenin/from_battle обратно в бой.
+    async function finishGroupFight() {
+        const onFightPage = () => /^\/fight\//.test(location.pathname);
+        const exitBtn = () => document.querySelector('[href*="/neftlenin/from_battle"]');
+        const t0 = Date.now();
+        let lastTry = t0;
+        while (isRunning && Date.now() - t0 < GROUP_FIGHT_TIMEOUT) {
+            try { await makeTurn(50); } catch (e) {}
+            const ended = await waitFor(exitBtn, 3000, 300);
+            // запасной выход раз в 12 секунд — если кнопку не нашли или мы вообще не на странице боя
+            if (ended || !onFightPage() || Date.now() - lastTry > 12000) {
+                lastTry = Date.now();
+                goNeft('/neftlenin/from_battle');
+                await sleep(1200);
+                if (neftReady()) { await sleep(400); return true; }
+            }
+        }
+        return false;
+    }
+
+    // ============================================================
+    //  ГЛАВНЫЙ ЦИКЛ
+    // ============================================================
+    async function runLoop() {
+        if (isRunning) return;
+        isRunning = true;
+        updateStartBtn();
+        log('🚀 Запущено');
+
+        const useBilet = !!cfg.modeBilet;
+        let susp = 0, maxSusp = 150, bilets = 0;
+        let resets = 0, collected = 0;
+        let stopMsg = null, finished = false;
+        let pending = null;            // { step, cnt } — награда последнего нападения, засчитываем когда шаг вырос
+        let sameStep = 0, fightStuck = 0, coolTries = 0, suspRetries = 0, weakTries = 0;
+        let questViewed = null;        // вентиль, на котором уже открыли окно предыстории квеста
+        let guard = 0;
+
+        // довести подозрительность до уровня, при котором действие ценой cost помещается в предел
+        // С Лабубой действия подозрительность не добавляют — там ничего не сбрасываем.
+        const ensure = async cost => {
+            while (isRunning && useBilet && susp + cost > maxSusp) {
+                if (bilets < RESET_COST) { stopMsg = 'Партбилеты закончились. Мёд не тратим — остановлено.'; return false; }
+                // Только партбилет (одиночный сброс), мёд не трогаем никогда.
+                // Сброс шлём прямым запросом, а не через NeftLenin.reset(): та молча ничего не делает,
+                // если любая кнопка сброса на странице помечена disabled.
+                const r = await api('reset', { type: RESET_TYPE_BILET });
+                if (!r.result) { stopMsg = 'Сброс подозрительности не удался: ' + (plain(r.error) || 'нет ответа'); return false; }
+                // шкалу подозрительности и счётчик партбилетов на экране обновляет сама игра — как после её кнопки
+                try { if (!r.return_url) W.NeftLenin.init(r); } catch (e) {}
+                susp = Number(r.suspicion) || 0;
+                if (r.partbilet != null) bilets = Number(r.partbilet) || 0; else bilets -= RESET_COST;
+                resets++;
+                log(`🎫 Сброс партбилетом → подозрительность ${susp}, партбилетов ${bilets}`);
+                await sleep(400);
+            }
+            return isRunning;
+        };
+
+        while (isRunning && guard < 3000) {
+            guard++;
+
+            const t = await getState();
+            if (!isRunning) break;
+            const ru = String(t.return_url || '');
+
+            // в бою — добиваем (групповой) или ждём (дуэль)
+            if (ru.indexOf('/fight/') !== -1) {
+                if (++fightStuck > FIGHT_STUCK_STOP) { stopMsg = 'Не получается выйти из боя.'; break; }
+                setStatus('В бою…');
+                if (isGroupFightUrl(ru)) await finishGroupFight(); else await sleep(DUEL_DELAY);
+                continue;
+            }
+            fightStuck = 0;
+
+            // дальше работаем кнопками игры — нужна открытая страница нефтепровода
+            if (t.step != null && !(await ensureNeftPage())) { stopMsg = 'Не удалось открыть страницу Нефтепровода.'; break; }
+            if (!isRunning) break;
+
+            if (t.step == null) {
+                stopMsg = ru ? 'Игра перенаправила на другую страницу (сессия?).' : (plain(t.error) || 'Игра не ответила.');
+                break;
+            }
+
+            const step = Number(t.step);
+            const stepMax = Number(t.stepMax) || 30;
+            susp = Number(t.suspicion) || 0;
+            maxSusp = Number(t.maxsuspicion) || 150;
+            bilets = Number(t.partbilet) || 0;
+
+            // учёт последнего нападения: шаг вырос — награда наша; не вырос — возможно, проигрыш
+            if (pending) {
+                if (step > pending.step) { collected += pending.cnt; sameStep = 0; }
+                else if (++sameStep >= SAME_STEP_STOP) { stopMsg = `Вентиль ${step} не проходится ${SAME_STEP_STOP} раза подряд — возможно, проигрыш.`; break; }
+                // с Лабубой нападение подозрительность не добавляет; выросла — Лабуба не работает
+                if (!useBilet && susp > pending.susp) { stopMsg = 'Подозрительность растёт — Лабуба не активна.'; break; }
+                pending = null;
+            }
+
+            if (step > stepMax) {
+                if (guard === 1) stopMsg = 'Нефтепровод сегодня уже пройден.';
+                else finished = true;
+                break;
+            }
+
+            let isX2 = false;
+            const info = () => `${t.typeStep === 'b' ? 'Ленин' : 'Вентиль ' + step + '/' + stepMax}${isX2 ? ' · Х2' : ''} · собрано ${collected} · подозрительность ${susp}` + (useBilet ? ` · партбилетов ${bilets}` : '');
+
+            // ---------- КВЕСТ ----------
+            if (t.typeStep === 'm') {
+                const price = (t.price_gamble || []).map(Number);
+                const ms = Number(t.mission_step);
+                setStatus(info() + ' · квест');
+                if (!t.game) {
+                    if (Number(t.timer) > 0) {
+                        // ожидание 10 минут бывает только без Лабубы — пропускаем за подозрительность
+                        if (!useBilet) { stopMsg = 'Квест требует ожидания. Похоже, Лабуба не активна.'; break; }
+                        if (!(await ensure(COST_SKIP_WAIT))) break;
+                        const s = await gameCall('skipMission');   // «Выполнить мгновенно»
+                        if (!s || !s.result) { stopMsg = 'Не удалось пропустить ожидание квеста: ' + (plain(s && s.error) || 'нет ответа'); break; }
+                    } else if (questViewed !== step) {
+                        questViewed = step;
+                        await gameCall('viewPreMission');          // «Начать задание» — окно с предысторией
+                    } else {
+                        const pm = await gameCall('viewPreMission2');   // кнопка в окне предыстории — квест начинается
+                        if (!pm || !pm.result) { stopMsg = 'Не удалось начать квест: ' + (plain(pm && pm.error) || 'нет ответа'); break; }
+                    }
+                } else if (ms === 0 || ms === 5) {
+                    // 0 — бросок проигран, 5 — все четыре выиграны. В обоих случаях идём дальше.
+                    if (!(await ensure(ms === 5 ? 0 : (price[0] || 60)))) break;
+                    const n = await gameCall('nextStep');
+                    if (!n || !n.result) {
+                        if (useBilet && isSuspError(n) && ++suspRetries <= 5) { susp = maxSusp; continue; }
+                        stopMsg = 'Не удалось выйти из квеста: ' + (plain(n && n.error) || 'нет ответа'); break;
+                    }
+                    suspRetries = 0;
+                    log(`🎲 Вентиль ${step}: квест ${ms === 5 ? 'выигран' : 'проигран'} → дальше`);
+                    await sleep(NEXT_DELAY - QUEST_DELAY);
+                } else {
+                    const pl = await gameCall('play');             // бросок кубика
+                    if (!pl || !pl.result) { stopMsg = 'Бросок в квесте не удался: ' + (plain(pl && pl.error) || 'нет ответа'); break; }
+                }
+                await sleep(QUEST_DELAY);
+                continue;
+            }
+
+            // ---------- БОЕВОЙ ШАГ (дуэль / групповой / босс) ----------
+            // Лечимся в начале КАЖДОГО боевого шага: игра проверяет здоровье уже на «Атаковать»,
+            // а после прошлого боя его может остаться меньше порога. При полном здоровье лечение ничего не тратит.
+            try { await restoreHP(); } catch (e) {}
+
+            const p = (await gameCall('viewPrize')) || {};         // «Атаковать» — окно с наградой патруля
+            if (!p.result || !p.data) {
+                if (isTooOften(p) && ++coolTries <= COOLDOWN_TRIES) { setStatus(info() + ' · ждём кулдаун'); await sleep(5000); continue; }
+                if (isWeak(p) && ++weakTries <= WEAK_TRIES) { setStatus(info() + ' · лечимся'); await healAndWait(); continue; }
+                stopMsg = 'Не удалось посмотреть награду: ' + (plain(p.error) || 'нет ответа'); break;
+            }
+            const ev = p.eventNeftlenin || null;
+            const cls = ev && ev.class;
+            const gameMax = ev ? (Number(ev.max) || 0) : 0;
+            // порог не выше максимума, который игра сама называет для этого шага; 0 — бьём любого
+            isX2 = gameMax > normalMaxForStep(step, t.typeStep);
+            const want = Math.min((isX2 ? thresholdX2ForStep(step, t.typeStep) : thresholdForStep(step, t.typeStep)) || 0, gameMax);
+            let cnt = rewardCount(p.data, cls);
+            susp = Number(p.suspicion) || 0;
+            let rr = 0;
+
+            while (isRunning && cnt < want && rr < MAX_REROLLS) {
+                if (!(await ensure(COST_ESCAPE))) break;
+                const before = susp;
+                const e = (await gameCall('escape')) || {};        // «Другой патруль»
+                if (!e.result || !e.data) {
+                    if (useBilet && isSuspError(e) && ++suspRetries <= 5) { susp = maxSusp; continue; }
+                    if (isWeak(e) && ++weakTries <= WEAK_TRIES) { setStatus(info() + ' · лечимся'); await healAndWait(); continue; }
+                    stopMsg = 'Не удалось сменить патруль: ' + (plain(e.error) || 'нет ответа'); break;
+                }
+                suspRetries = 0;
+                susp = Number(e.suspicion) || 0;
+                cnt = rewardCount(e.data, cls);
+                rr++;
+                if (!useBilet && susp > before) { stopMsg = 'Подозрительность растёт — Лабуба не активна.'; break; }
+                setStatus(info() + ` · награда ${cnt}/${want}, перебор ${rr}`);
+                await sleep(REROLL_DELAY);
+            }
+            if (stopMsg || !isRunning) break;
+            if (cnt < want) { stopMsg = `Вентиль ${step}: за ${MAX_REROLLS} переборов награда ${want} так и не выпала.`; break; }
+
+            if (!(await ensure(COST_ATTACK))) break;
+            log(`⚔️ Вентиль ${step}: награда ${cnt}${want ? ' ≥ ' + want : ''} (переборов ${rr}) → НАПАСТЬ`);
+            setStatus(info() + ` · награда ${cnt}, нападаю`);
+            try { await restoreHP(); } catch (e) {}
+
+            const a = (await gameCall('attack')) || {};            // «Напасть» — игра сама открывает страницу боя
+            if (!a.return_url) {
+                if (isTooOften(a) && ++coolTries <= COOLDOWN_TRIES) { setStatus(info() + ' · ждём кулдаун'); await sleep(5000); continue; }
+                if (useBilet && isSuspError(a) && ++suspRetries <= 5) { continue; }  // на следующем круге ensure сбросит
+                if (isWeak(a) && ++weakTries <= WEAK_TRIES) { setStatus(info() + ' · лечимся'); await healAndWait(); continue; }
+                stopMsg = 'Не удалось напасть: ' + (plain(a.error || a.alertbox) || 'нет ответа'); break;
+            }
+            coolTries = 0; suspRetries = 0; weakTries = 0;
+            pending = { step: step, cnt: cnt, susp: susp };
+
+            if (isGroupFightUrl(a.return_url)) { await sleep(700); await finishGroupFight(); }
+            else {
+                // дуэль решается сразу: показываем страницу боя и возвращаемся на трубу
+                await sleep(DUEL_DELAY);
+                goNeft('/neftlenin/');
+                await waitNeftReady();
+            }
+        }
+
+        const wasStoppedByUser = !isRunning && !stopMsg && !finished;
+        isRunning = false;
+        updateStartBtn();
+
+        const tail = `Собрано: ${collected}.` + (useBilet ? ` Сбросов партбилетами: ${resets}.` : '');
+        if (finished) {
+            log('🏁 Нефтепровод пройден. ' + tail);
+            setStatus('Нефтепровод пройден. ' + tail);
+            // после полного прохождения сбрасываем настройки (не храним конфиг навсегда) — как в Крысах
+            cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
+            saveCfg();
+            fillPanelFromCfg();
+        } else if (stopMsg) {
+            log('⛔ ' + stopMsg + ' ' + tail);
+            setStatus('Остановлено: ' + stopMsg + ' ' + tail);
+        } else {
+            log('⏹️ Остановлено. ' + tail);
+            setStatus('Остановлено. ' + tail);
+        }
+
+        // обновляем картинку нефтепровода и только потом показываем алерт, чтобы его не смахнуло ре-рендером
+        if (onNeft()) { goNeft('/neftlenin/'); await sleep(1500); }
+        if (finished) gameAlert('🛢️ Готово', 'Нефтепровод пройден. ' + tail);
+        else if (stopMsg && !wasStoppedByUser) gameAlert('🛢️ Остановлено', stopMsg + ' ' + tail);
+    }
+
+    function stopSearch() { isRunning = false; updateStartBtn(); }
+
+    // ============================================================
+    //  UI
+    // ============================================================
+    const PANEL_ID = 'mw-neftsearch-panel';
+    // Фон и рамку панели не задаём сами: класс игры block-bordered даёт тот же вид,
+    // что у соседних блоков («Эксклюзивный артефакт», «Броневичок вождя»).
+
+    // два взаимоисключающих режима: id галочки -> поле в cfg
+    const MODE_CFG = {
+        'mw-ns-labubu': 'modeLabubu',
+        'mw-ns-bilet':  'modeBilet'
+    };
+    const MODE_IDS = Object.keys(MODE_CFG);
+
+    function injectStyles() {
+        if (document.getElementById('mw-neftsearch-style')) return;
+        const css = `
+            #${PANEL_ID}{margin:10px 0 0;font:12px Tahoma,Arial,sans-serif;color:#5a3d12;clear:both}
+            #${PANEL_ID} .mw-ns-title{font-weight:bold;font-size:13px;color:#975d17;cursor:pointer;user-select:none}
+            #${PANEL_ID} .mw-ns-arrow{display:inline-block;width:12px;font-size:10px}
+            #${PANEL_ID} .mw-ns-body{margin-top:8px}
+            #${PANEL_ID} .mw-ns-modes{display:flex;gap:14px;margin-bottom:10px;justify-content:center}
+            #${PANEL_ID} .mw-ns-mode{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;width:180px}
+            #${PANEL_ID} .mw-ns-mode img{width:48px;height:48px;object-fit:contain}
+            #${PANEL_ID} .mw-ns-mode label{cursor:pointer;line-height:1.2}
+            #${PANEL_ID} .mw-ns-desc{font-size:11px;font-style:italic;color:#7a5a20;margin-bottom:10px;text-align:left}
+            #${PANEL_ID} .mw-ns-cols{display:flex;gap:24px;justify-content:center;align-items:flex-start;margin-bottom:10px}
+            #${PANEL_ID} .mw-ns-col{flex:0 1 270px}
+            #${PANEL_ID} .mw-ns-col-title{font-weight:bold;text-align:center;margin-bottom:6px;height:18px;line-height:18px}
+            #${PANEL_ID} .mw-ns-col-title img{width:22px;height:22px;vertical-align:middle;margin:-4px 0 -2px}
+            #${PANEL_ID} .mw-ns-ranges{display:grid;grid-template-columns:auto 60px;gap:5px 8px;align-items:center}
+            #${PANEL_ID} .mw-ns-ranges span{text-align:left}
+            #${PANEL_ID} .mw-ns-ranges input{width:54px;height:22px;text-align:center;justify-self:center;border:1px solid #c9a86a;border-radius:3px}
+            #${PANEL_ID} .mw-ns-save-row{text-align:center;margin-bottom:8px}
+            #${PANEL_ID} .mw-ns-save-note{display:none;margin-top:5px;font-size:11px;color:#3f7a20}
+            #${PANEL_ID} .mw-ns-btn{display:inline-block;padding:5px 14px;border:1px solid #905b06;border-radius:4px;background:#f0c060;
+                color:#5a3d12;font-weight:bold;cursor:pointer;font-size:12px}
+            #${PANEL_ID} .mw-ns-btn:hover{background:#e8b040}
+            #${PANEL_ID} .mw-ns-start-btn{display:block;width:100%;box-sizing:border-box;text-align:center;
+                padding:9px 0;font-size:14px;background:#e0a020}
+            #${PANEL_ID} .mw-ns-start-btn:hover{background:#d49010}
+            #${PANEL_ID} .mw-ns-status{margin-top:8px;font-size:11px;color:#5a3d12;text-align:center;min-height:14px}
+        `;
+        const st = document.createElement('style');
+        st.id = 'mw-neftsearch-style'; st.textContent = css;
+        document.head.appendChild(st);
+    }
+
+    function buildPanel() {
+        return $(`
+            <div id="${PANEL_ID}" class="block-bordered css">
+                <div class="mw-ns-title" id="mw-ns-toggle"><span class="mw-ns-arrow" id="mw-ns-arrow">▼</span> 🛢️ Поиск наград в Нефтепроводе</div>
+                <div class="mw-ns-body" id="mw-ns-body">
+                    <div class="mw-ns-modes">
+                        <div class="mw-ns-mode">
+                            <img src="/@/images/loc/buba/bubas/53.png" alt="Лабуба">
+                            <label><input type="checkbox" id="mw-ns-labubu"> Проходить с активной Лабубой</label>
+                        </div>
+                        <div class="mw-ns-mode">
+                            <img src="/@/images/obj/item33.png" alt="Партбилеты">
+                            <label><input type="checkbox" id="mw-ns-bilet"> Проходить за партбилеты</label>
+                        </div>
+                    </div>
+                    <div class="mw-ns-desc">Собирает <span class="bullet"><i></i><b>пули</b></span>, <span class="sparkles"><i></i><b>искры</b></span> и <span class="snowflake"><i></i><b>снежинки</b></span> по указанным значениям. Пусто или 0 — патруль не перебирается. Мёд не тратится никогда. Когда акции Х2 нет — настраивайте левую колонку, когда идёт Х2 — правую.</div>
+                    <div class="mw-ns-cols">
+                        <div class="mw-ns-col">
+                            <div class="mw-ns-col-title">Обычные значения</div>
+                            <div class="mw-ns-ranges">
+                                <span>Вентили 1–7 (макс 2):</span>   <input type="number" id="mw-ns-r1"   min="0" max="2">
+                                <span>Вентили 8–14 (макс 3):</span>  <input type="number" id="mw-ns-r8"   min="0" max="3">
+                                <span>Вентили 15–22 (макс 4):</span> <input type="number" id="mw-ns-r16"  min="0" max="4">
+                                <span>Вентили 23–29 (макс 5):</span> <input type="number" id="mw-ns-r23"  min="0" max="5">
+                                <span>Ленин (макс 18):</span>        <input type="number" id="mw-ns-boss" min="0" max="18">
+                            </div>
+                        </div>
+                        <div class="mw-ns-col">
+                            <div class="mw-ns-col-title">При <img src="/@/images/s/may2014/x2.png" alt="Х2" title="При акции Х2"></div>
+                            <div class="mw-ns-ranges">
+                                <span>Вентили 1–7 (макс 3):</span>    <input type="number" id="mw-ns-x1"    min="0" max="3">
+                                <span>Вентиль 8 (макс 4):</span>      <input type="number" id="mw-ns-x8"    min="0" max="4">
+                                <span>Вентили 9–14 (макс 8):</span>   <input type="number" id="mw-ns-x9"    min="0" max="8">
+                                <span>Вентили 15–18 (макс 10):</span> <input type="number" id="mw-ns-x15"   min="0" max="10">
+                                <span>Вентили 20–21 (макс 15):</span> <input type="number" id="mw-ns-x19"   min="0" max="15">
+                                <span>Вентили 23–29 (макс 21):</span> <input type="number" id="mw-ns-x23"   min="0" max="21">
+                                <span>Ленин (макс 56):</span>         <input type="number" id="mw-ns-xboss" min="0" max="56">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mw-ns-save-row">
+                        <div class="mw-ns-btn" id="mw-ns-save">💾 Сохранить</div>
+                        <div class="mw-ns-save-note" id="mw-ns-save-note">Настройки сохранены</div>
+                    </div>
+                    <div class="mw-ns-btn mw-ns-start-btn" id="mw-ns-start">🚀 Запустить</div>
+                    <div class="mw-ns-status" id="mw-ns-status"></div>
+                </div>
+            </div>
+        `);
+    }
+
+    function setStatus(text) {
+        statusText = text || '';
+        $('#mw-ns-status').text(statusText);
+    }
+
+    function applyCollapsed(collapsed) {
+        $('#mw-ns-body').toggle(!collapsed);
+        $('#mw-ns-arrow').text(collapsed ? '▶' : '▼');
+    }
+
+    function fillPanelFromCfg() {
+        MODE_IDS.forEach(id => $('#' + id).prop('checked', !!cfg[MODE_CFG[id]]));
+        RANGE_KEYS.forEach(k => $('#mw-ns-' + k).val(cfg.ranges[k] || ''));
+        X2_KEYS.forEach(k => $('#mw-ns-' + k).val(cfg.x2[k] || ''));
+        $('#mw-ns-status').text(statusText);
+        applyCollapsed(panelCollapsed);
+    }
+
+    function readPanelToCfg() {
+        MODE_IDS.forEach(id => { cfg[MODE_CFG[id]] = $('#' + id).prop('checked'); });
+        const num = k => {
+            const $e = $('#mw-ns-' + k);
+            let v = parseInt($e.val(), 10) || 0;
+            if (v < 0) v = 0;
+            if (v > FIELD_MAX[k]) v = FIELD_MAX[k];   // не больше максимума диапазона
+            $e.val(v || '');
+            return v;
+        };
+        RANGE_KEYS.forEach(k => { cfg.ranges[k] = num(k); });
+        X2_KEYS.forEach(k => { cfg.x2[k] = num(k); });
+    }
+
+    function showSaveNote() {
+        const $note = $('#mw-ns-save-note');
+        $note.show();
+        clearTimeout(showSaveNote._t);
+        showSaveNote._t = setTimeout(() => $note.hide(), 1800);
+    }
+
+    function updateStartBtn() { $('#mw-ns-start').text(isRunning ? '⏹️ Стоп' : '🚀 Запустить'); }
+
+    function bindPanel() {
+        const $panel = $('#' + PANEL_ID);
+        if (!$panel.length || $panel.data('mwBound')) return;
+        $panel.data('mwBound', true);
+
+        // сворачивание панели по клику на заголовок
+        $panel.on('click', '#mw-ns-toggle', () => { panelCollapsed = !panelCollapsed; applyCollapsed(panelCollapsed); });
+
+        // взаимоисключающие галочки: активна максимум одна
+        $panel.on('change', MODE_IDS.map(id => '#' + id).join(','), function () {
+            if (this.checked) MODE_IDS.forEach(other => { if (other !== this.id) $('#' + other).prop('checked', false); });
+        });
+
+        // ограничение ввода по максимуму диапазона
+        $panel.on('input', '.mw-ns-ranges input', function () {
+            const k = this.id.replace('mw-ns-', '');
+            const v = parseInt(this.value, 10);
+            if (!isNaN(v) && v > FIELD_MAX[k]) this.value = FIELD_MAX[k];
+        });
+
+        $panel.on('click', '#mw-ns-save', () => { readPanelToCfg(); saveCfg(); showSaveNote(); });
+
+        $panel.on('click', '#mw-ns-start', () => {
+            if (isRunning) { stopSearch(); return; }
+            readPanelToCfg(); saveCfg();
+            if (MODE_IDS.some(id => cfg[MODE_CFG[id]])) runLoop();
+            else setStatus('Отметь режим: с Лабубой или за партбилеты.');
+        });
+    }
+
+    // блок кнопок сброса подозрительности — панель ставим сразу под ним, над «Эксклюзивным артефактом»
+    function getAnchor() { return document.querySelector('#content .pipeline-actions'); }
+
+    function ensurePanel() {
+        if (!onNeft() || !W.NeftLenin) return;
+        if (document.getElementById(PANEL_ID)) { bindPanel(); return; }
+        const anchor = getAnchor();
+        if (!anchor) return;
+
+        injectStyles();
+        $(anchor).after(buildPanel());
+        fillPanelFromCfg();
+        bindPanel();
+        updateStartBtn();
+        log('Панель готова');
+    }
+
+    // ============================================================
+    //  ОТСЛЕЖИВАНИЕ СТРАНИЦЫ
+    // ============================================================
+    function init() {
+        observer = new MutationObserver(() => { if (onNeft()) ensurePanel(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+        setInterval(() => { if (onNeft()) ensurePanel(); }, 1000);
+        if (onNeft()) ensurePanel();
+        console.log('[NeftSearch] v1.0 загружен');
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+})();
 
 (function () {
     'use strict';
