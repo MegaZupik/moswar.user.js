@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        10.3
+// @version        10.4
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -1030,10 +1030,11 @@ setInterval(showCountryPercent, 500);
     // ============================================================
 
     // Картинка награды, КОЛИЧЕСТВО которой сравниваем с порогом.
-    const REWARD_IMG = '/@/images/obj/bullets.png';
+    const REWARD_IMG = '/@/images/obj/sparkles.png';
+/*     '/@/images/obj/bullets.png', */
 
     const MAX_LEVEL    = 40;    // последний спуск
-    const TRACK_DELAY  = 800;   // пауза после "Выследить" (даём прогрузиться награде)
+    const TRACK_DELAY  = 1400;   // пауза после "Выследить" (даём прогрузиться награде)
     const LEAVE_DELAY  = 1500;  // короткая пауза после "Убежать", без долгого ожидания кулдауна
     const FIGHT_DELAY  = 1000;  // пауза после "Напасть" (бой стартует)
     const ELEVATOR_DELAY = 800; // пауза после лифта Харони (перекат за жетоны) — на смену монстра
@@ -1257,6 +1258,7 @@ setInterval(showCountryPercent, 500);
         let lastLevel = null;
         let finishedAll = false;
         let guard = 0;
+        const REWARD_DELAY = 1000;
 
         while (isRunning && guard < 2000) {
             guard++;
