@@ -15,6 +15,267 @@
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
 
+// Нажиматель лабубу кроме нефти и крыс
+
+(function () {
+    'use strict';
+
+    if (window.top !== window.self) return;
+
+    const BUTTON_ID = 'mw-labubu-btn';
+    const STORAGE = 'mw-labubu';
+    const DELAY = 80;
+
+    if (window.mwLabubuActivator) {
+        window.mwLabubuActivator.ensure();
+        return;
+    }
+
+    const codes = [];
+
+    for (let n = 1; n <= 25; n++) codes.push(`labubu_0_${n}`);
+    for (let n = 27; n <= 50; n++) codes.push(`labubu_1_${n}`);
+    for (let n = 51; n <= 63; n++) codes.push(`labubu_2_${n}`);
+    for (let n = 65; n <= 70; n++) codes.push(`labubu_2_${n}`);
+
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    let btn = null;
+    let running = false;
+
+    function onLabubuPage() {
+        return location.pathname.replace(/\/+$/, '') === '/labubu';
+    }
+
+    function makeDraggable(element, storageName) {
+        let dragging = false;
+        let moved = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        element.addEventListener('pointerdown', e => {
+            if (e.button !== undefined && e.button !== 0) return;
+
+            dragging = true;
+            moved = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = element.offsetLeft;
+            startTop = element.offsetTop;
+
+            try {
+                element.setPointerCapture(e.pointerId);
+            } catch (_) {}
+        });
+
+        element.addEventListener('pointermove', e => {
+            if (!dragging) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            if (!moved && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+            moved = true;
+
+            const x = Math.max(0, Math.min(
+                window.innerWidth - element.offsetWidth,
+                startLeft + dx
+            ));
+
+            const y = Math.max(0, Math.min(
+                window.innerHeight - element.offsetHeight,
+                startTop + dy
+            ));
+
+            element.style.left = x + 'px';
+            element.style.top = y + 'px';
+
+            e.preventDefault();
+        });
+
+        function finish(e) {
+            if (!dragging) return;
+
+            dragging = false;
+
+            try {
+                element.releasePointerCapture(e.pointerId);
+            } catch (_) {}
+
+            if (moved) {
+                localStorage.setItem(storageName + '-x', element.offsetLeft);
+                localStorage.setItem(storageName + '-y', element.offsetTop);
+            }
+
+            setTimeout(() => {
+                moved = false;
+            }, 100);
+        }
+
+        element.addEventListener('pointerup', finish);
+        element.addEventListener('pointercancel', finish);
+
+        return () => moved;
+    }
+
+    function showMessage(text, color = '#009900') {
+        const msg = document.createElement('div');
+        msg.textContent = text;
+        msg.style.cssText = `
+            position:fixed;
+            left:50%;
+            top:50%;
+            transform:translate(-50%,-50%);
+            background:${color};
+            color:white;
+            padding:18px 28px;
+            font-size:24px;
+            font-weight:bold;
+            border:3px solid black;
+            border-radius:15px;
+            z-index:2147483647;
+            box-shadow:0 0 20px black;
+        `;
+
+        document.body.appendChild(msg);
+        setTimeout(() => msg.remove(), 2500);
+    }
+
+    async function activateAll() {
+        if (!onLabubuPage() || running) return;
+
+        running = true;
+        btn.style.background = '#996600';
+
+        let errors = 0;
+
+        try {
+            for (let i = 0; i < codes.length; i++) {
+                const body = new URLSearchParams({
+                    action: 'activate',
+                    code: codes[i],
+                    ajax: '1',
+                    __referrer: '/labubu/',
+                    return_url: '/labubu/'
+                });
+
+                // Не ждём ответа, но сохраняем интервал между отправками.
+                fetch('/labubu/', {
+                    method: 'POST',
+                    headers: {
+                        'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                        'x-requested-with': 'XMLHttpRequest'
+                    },
+                    body: body.toString(),
+                    credentials: 'include'
+                }).then(response => {
+                    if (!response.ok) {
+                        console.warn(codes[i], 'HTTP', response.status);
+                    }
+                }).catch(error => {
+                    console.error(codes[i], error);
+                });
+
+                btn.textContent = `${i + 1}/${codes.length}`;
+                await sleep(DELAY);
+            }
+
+           btn.textContent = 'Готово';
+showMessage('Активация лабубу завершена');
+
+setTimeout(() => {
+    location.reload();
+}, 1000);
+
+        } catch (error) {
+            errors++;
+            console.error(error);
+            showMessage(`Ошибка: ${errors}`, '#c00000');
+        } finally {
+            running = false;
+            btn.style.background = '#333';
+        }
+    }
+
+    function createButton() {
+        if (!document.body || document.getElementById(BUTTON_ID)) return;
+
+        btn = document.createElement('div');
+        btn.id = BUTTON_ID;
+        btn.textContent = 'LB';
+
+        btn.style.cssText = `
+            position:fixed;
+            left:${localStorage.getItem(STORAGE + '-x') ?? 20}px;
+            top:${localStorage.getItem(STORAGE + '-y') ?? 200}px;
+            width:80px;
+            height:80px;
+            background:#333;
+            color:white;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border:3px solid #888;
+            border-radius:12px;
+            font-size:26px;
+            font-weight:bold;
+            cursor:grab;
+            user-select:none;
+            touch-action:none;
+            z-index:2147483647;
+            box-sizing:border-box;
+            box-shadow:0 0 5px black,inset 0 0 8px #555;
+        `;
+
+        document.body.appendChild(btn);
+
+        const wasMoved = makeDraggable(btn, STORAGE);
+
+        btn.addEventListener('click', () => {
+            if (wasMoved()) return;
+            if (!onLabubuPage()) return;
+            activateAll();
+        });
+
+        updateVisibility();
+    }
+
+    function updateVisibility() {
+        if (!btn || !btn.isConnected) return;
+        btn.style.display = onLabubuPage() ? 'flex' : 'none';
+    }
+
+    function ensure() {
+        if (!document.body) return;
+
+        if (!document.getElementById(BUTTON_ID)) {
+            btn = null;
+            createButton();
+        } else {
+            btn = document.getElementById(BUTTON_ID);
+            updateVisibility();
+        }
+    }
+
+    window.mwLabubuActivator = { ensure };
+
+    ensure();
+
+    // Повторная проверка помогает при динамической перерисовке страницы.
+    setInterval(ensure, 500);
+
+    // Следим за заменой содержимого страницы.
+    new MutationObserver(() => {
+        ensure();
+    }).observe(document.documentElement, {
+        childList: true,
+        subtree: true
+    });
+
+})();
+
 // СКРИПТ НА НЕФТЕПРОВОД
 (function () {
     'use strict';
