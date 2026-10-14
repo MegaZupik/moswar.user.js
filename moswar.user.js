@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        10.5
+// @version        10.9
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -9168,7 +9168,7 @@ if(AUTO.duck)
           href: "/sovet/career/",
           text: "\u{1F454} \u0413\u043E\u0441\u041F\u0440\u043E\u043C",
         },
-        { href: "/petarena/", text: "\u{1F9AE} \u041F\u0435\u0442\u044B" },
+        { href: "/squid/", text: "\u{1F9AE} \Кальмар" },
         { href: "/travel2/", text: "\u{1F30D} \u0420\u0435\u0439\u0434\u044B" },
         {
           href: "/automobile/ride/",
