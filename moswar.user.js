@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        10.9
+// @version        11.2
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,680 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+
+//скрипт на рейды автобой
+
+(function () {
+    'use strict';
+
+    const BUTTON_ID = 'mw-go-raid-btn';
+    const STORAGE_KEY = 'mw-go-raid-position';
+    const ENABLE_KEY = 'mw-go-raid-enabled';
+
+    let enabled = localStorage.getItem(ENABLE_KEY) !== 'false';
+    let waitingForSkip = false;
+    let observer = null;
+    let waitTimer = null;
+
+    function isTravelPage() {
+        return location.pathname.replace(/\/+$/, '') === '/travel2';
+    }
+
+    function isFightPage() {
+        return /^\/fight\/\d+$/.test(location.pathname.replace(/\/+$/, ''));
+    }
+
+    function getPosition() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+                left: 20,
+                top: 200
+            };
+        } catch {
+            return { left: 20, top: 200 };
+        }
+    }
+
+    function savePosition(left, top) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ left, top }));
+    }
+
+    function updateButtonAppearance() {
+        const button = document.getElementById(BUTTON_ID);
+        if (!button) return;
+
+        let line = button.querySelector('.mw-go-raid-cross');
+
+        if (!enabled && !line) {
+            line = document.createElement('div');
+            line.className = 'mw-go-raid-cross';
+
+            Object.assign(line.style, {
+                position: 'absolute',
+                width: '88px',
+                height: '7px',
+                background: 'red',
+                border: '1px solid #700',
+                borderRadius: '3px',
+                transform: 'rotate(-45deg)',
+                pointerEvents: 'none',
+                zIndex: '2'
+            });
+
+            button.appendChild(line);
+        }
+
+        if (enabled && line) line.remove();
+
+        button.style.opacity = enabled ? '1' : '0.65';
+    }
+
+    function stopWaiting() {
+        waitingForSkip = false;
+
+        if (observer) {
+            observer.disconnect();
+            observer = null;
+        }
+
+        if (waitTimer) {
+            clearInterval(waitTimer);
+            waitTimer = null;
+        }
+    }
+
+    function findSkipButton() {
+        if (!isFightPage()) return null;
+
+        const button = document.querySelector(
+            'button.skip-npc-fight-btn'
+        );
+
+        if (!button || button.offsetParent === null) return null;
+
+        return button;
+    }
+
+    function checkSkipButton() {
+        if (!enabled || !waitingForSkip) return;
+
+        const button = findSkipButton();
+
+        if (!button) return;
+
+        // Завершаем ожидание до клика, чтобы исключить повторное нажатие
+        stopWaiting();
+
+        button.click();
+
+        console.log('[GO RAID] Кнопка пропуска нажата');
+    }
+
+    function startWaitingForSkip() {
+        if (!enabled || waitingForSkip) return;
+
+        waitingForSkip = true;
+
+        console.log('[GO RAID] Ожидание перехода на страницу боя');
+
+        observer = new MutationObserver(checkSkipButton);
+
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style', 'hidden']
+        });
+
+        waitTimer = setInterval(checkSkipButton, 100);
+
+        // Первая проверка, если кнопка уже появилась
+        checkSkipButton();
+    }
+
+    // Физический клик по кнопке атаки босса
+    document.addEventListener('click', function (event) {
+        if (!enabled || !isTravelPage() || !event.isTrusted) return;
+        if (!(event.target instanceof Element)) return;
+
+        const attackButton = event.target.closest(
+            'button.worldtour__button-big[onclick*="Worldtour2.startFight"]'
+        );
+
+        if (!attackButton) return;
+
+        console.log('[GO RAID] Физический клик по атаке обнаружен');
+
+        startWaitingForSkip();
+    }, true);
+
+    function toggleEnabled() {
+        enabled = !enabled;
+
+        localStorage.setItem(ENABLE_KEY, String(enabled));
+
+        if (!enabled) {
+            stopWaiting();
+            console.log('[GO RAID] Выключена');
+        } else {
+            console.log('[GO RAID] Включена');
+        }
+
+        updateButtonAppearance();
+    }
+
+    function createButton() {
+        if (document.getElementById(BUTTON_ID)) return;
+
+        const button = document.createElement('div');
+        button.id = BUTTON_ID;
+        button.textContent = 'GO RAID';
+
+        Object.assign(button.style, {
+            position: 'fixed',
+            width: '80px',
+            height: '80px',
+            background: '#333',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '3px solid #888',
+            borderRadius: '12px',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            cursor: 'grab',
+            userSelect: 'none',
+            touchAction: 'none',
+            zIndex: '2147483647',
+            boxSizing: 'border-box',
+            boxShadow: '0 0 5px black,inset 0 0 8px #555'
+        });
+
+        const position = getPosition();
+        button.style.left = position.left + 'px';
+        button.style.top = position.top + 'px';
+
+        let dragging = false;
+        let moved = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        button.addEventListener('pointerdown', event => {
+            if (event.button !== 0 && event.pointerType === 'mouse') return;
+
+            dragging = true;
+            moved = false;
+
+            startX = event.clientX;
+            startY = event.clientY;
+            startLeft = button.offsetLeft;
+            startTop = button.offsetTop;
+
+            button.style.cursor = 'grabbing';
+            button.setPointerCapture(event.pointerId);
+            event.preventDefault();
+        });
+
+        button.addEventListener('pointermove', event => {
+            if (!dragging) return;
+
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+
+            button.style.left = Math.max(
+                0,
+                Math.min(window.innerWidth - button.offsetWidth, startLeft + dx)
+            ) + 'px';
+
+            button.style.top = Math.max(
+                0,
+                Math.min(window.innerHeight - button.offsetHeight, startTop + dy)
+            ) + 'px';
+        });
+
+        button.addEventListener('pointerup', () => {
+            if (!dragging) return;
+
+            dragging = false;
+            button.style.cursor = 'grab';
+            savePosition(button.offsetLeft, button.offsetTop);
+        });
+
+        button.addEventListener('pointercancel', () => {
+            dragging = false;
+            button.style.cursor = 'grab';
+            savePosition(button.offsetLeft, button.offsetTop);
+        });
+
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+
+            if (moved) {
+                moved = false;
+                return;
+            }
+
+            toggleEnabled();
+        });
+
+        document.body.appendChild(button);
+        updateButtonAppearance();
+    }
+
+    // Управление только отображением кнопки.
+    // Ожидание боя здесь НЕ останавливаем.
+    function ensureButton() {
+        if (!document.body) return;
+
+        const existing = document.getElementById(BUTTON_ID);
+
+        if (!isTravelPage()) {
+            if (existing) existing.remove();
+            return;
+        }
+
+        createButton();
+    }
+
+    ensureButton();
+
+    new MutationObserver(ensureButton).observe(
+        document.documentElement,
+        {
+            childList: true,
+            subtree: true
+        }
+    );
+
+    setInterval(ensureButton, 500);
+
+})();
+
+
+
+
+
+//скрипт на запуск грзуовиков
+
+
+
+
+(function () {
+    'use strict';
+
+    if (window.top !== window.self) return;
+
+    const STORAGE_SEND = 'mw-patriot-send';
+    const STORAGE_TOGGLE = 'mw-patriot-toggle';
+
+    const ICON_URL = 'https://www.moswar.ru/@/images/loc/crimea/trucks/015.png';
+
+    const BUTTON_SEND_ID = 'mw-patriot-send-btn';
+    const BUTTON_TOGGLE_ID = 'mw-patriot-toggle-btn';
+
+    if (window.mwPatriotTrucksActivator) {
+        window.mwPatriotTrucksActivator.ensure();
+        return;
+    }
+
+    let sendBtn = null;
+    let toggleBtn = null;
+    let runningSend = false;
+    let runningToggle = false;
+
+    function onButovoPage() {
+        return location.pathname.replace(/\/+$/, '') === '/butovo';
+    }
+
+    function makeDraggable(element, storageName) {
+        let dragging = false;
+        let moved = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        element.addEventListener('pointerdown', e => {
+            if (e.button !== undefined && e.button !== 0) return;
+
+            dragging = true;
+            moved = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = element.offsetLeft;
+            startTop = element.offsetTop;
+
+            try {
+                element.setPointerCapture(e.pointerId);
+            } catch (_) {}
+        });
+
+        element.addEventListener('pointermove', e => {
+            if (!dragging) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            if (!moved && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+            moved = true;
+
+            const x = Math.max(0, Math.min(
+                window.innerWidth - element.offsetWidth,
+                startLeft + dx
+            ));
+
+            const y = Math.max(0, Math.min(
+                window.innerHeight - element.offsetHeight,
+                startTop + dy
+            ));
+
+            element.style.left = x + 'px';
+            element.style.top = y + 'px';
+
+            e.preventDefault();
+        });
+
+        function finish(e) {
+            if (!dragging) return;
+
+            dragging = false;
+
+            try {
+                element.releasePointerCapture(e.pointerId);
+            } catch (_) {}
+
+            if (moved) {
+                localStorage.setItem(storageName + '-x', element.offsetLeft);
+                localStorage.setItem(storageName + '-y', element.offsetTop);
+            }
+
+            setTimeout(() => {
+                moved = false;
+            }, 100);
+        }
+
+        element.addEventListener('pointerup', finish);
+        element.addEventListener('pointercancel', finish);
+
+        return () => moved;
+    }
+
+    function showMessage(text, color = '#009900', duration = 2500) {
+        const msg = document.createElement('div');
+        msg.textContent = text;
+
+        msg.style.cssText = `
+            position:fixed;
+            left:50%;
+            top:50%;
+            transform:translate(-50%,-50%);
+            background:${color};
+            color:white;
+            padding:18px 28px;
+            font-size:24px;
+            font-weight:bold;
+            border:3px solid black;
+            border-radius:15px;
+            z-index:2147483647;
+            box-shadow:0 0 20px black;
+        `;
+
+        document.body.appendChild(msg);
+        setTimeout(() => msg.remove(), duration);
+    }
+
+    function finishAndReload() {
+        showMessage('ГОТОВО', '#009900', 500);
+
+        setTimeout(() => {
+            location.reload();
+        }, 500);
+    }
+
+    function sendRequest(truck) {
+        return fetch('https://www.moswar.ru/butovo/crimea/', {
+            headers: {
+                'accept': 'application/json, text/javascript, */*; q=0.01',
+                'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'x-requested-with': 'XMLHttpRequest'
+            },
+            referrer: 'https://www.moswar.ru/butovo/',
+            body:
+                `action=patriot-send&mode=truck&truck=${truck}` +
+                '&autoprolong=checked' +
+                '&upgrade0=1&upgrade1=1&upgrade2=1' +
+                '&upgrade3=1&upgrade4=1&upgrade5=1',
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'include'
+        });
+    }
+
+    function toggleRequest(truck) {
+        return fetch('https://www.moswar.ru/butovo/crimea/', {
+            headers: {
+                'accept': 'application/json, text/javascript, */*; q=0.01',
+                'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'x-requested-with': 'XMLHttpRequest'
+            },
+            referrer: 'https://www.moswar.ru/butovo/',
+            body: `action=patriot-truck-toggle&truck=${truck}&mode=truck`,
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'include'
+        });
+    }
+
+    async function sendAllTrucks() {
+        if (!onButovoPage() || runningSend || runningToggle) return;
+
+        runningSend = true;
+        sendBtn.style.background = '#996600';
+
+        const promises = [];
+
+        for (let truck = 0; truck <= 17; truck++) {
+            promises.push(
+                sendRequest(truck).then(response => {
+                    if (!response.ok) {
+                        console.warn(`Отправка truck=${truck}: HTTP ${response.status}`);
+                    }
+                    return response;
+                })
+            );
+        }
+
+        console.log('Запущено 18 запросов отправки грузовиков.');
+
+        const results = await Promise.allSettled(promises);
+
+        const errors = results.filter(result => result.status === 'rejected');
+        if (errors.length) {
+            console.error('Ошибок отправки:', errors);
+        }
+
+        console.log('Все запросы отправки завершились.');
+
+        runningSend = false;
+        finishAndReload();
+    }
+
+    async function toggleAllTrucks() {
+        if (!onButovoPage() || runningToggle || runningSend) return;
+
+        runningToggle = true;
+        toggleBtn.style.background = '#996600';
+
+        const trucks = [];
+
+        for (let truck = 0; truck <= 17; truck++) {
+            if (truck === 14 || truck === 15) continue;
+            trucks.push(truck);
+        }
+
+        const promises = trucks.map(truck =>
+            toggleRequest(truck).then(response => {
+                if (!response.ok) {
+                    console.warn(`Переключение truck=${truck}: HTTP ${response.status}`);
+                }
+                return response;
+            })
+        );
+
+        console.log('Запущены запросы переключения:', trucks);
+
+        const results = await Promise.allSettled(promises);
+
+        const errors = results.filter(result => result.status === 'rejected');
+        if (errors.length) {
+            console.error('Ошибок переключения:', errors);
+        }
+
+        console.log('Все запросы переключения завершились.');
+
+        runningToggle = false;
+        finishAndReload();
+    }
+
+    function createButton(id, storage, defaultX, defaultY, crossed, title, callback) {
+        if (!document.body || document.getElementById(id)) return null;
+
+        const button = document.createElement('div');
+        button.id = id;
+
+        button.style.cssText = `
+            position:fixed;
+            left:${localStorage.getItem(storage + '-x') ?? defaultX}px;
+            top:${localStorage.getItem(storage + '-y') ?? defaultY}px;
+            width:80px;
+            height:80px;
+            background:#333;
+            color:white;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border:3px solid #888;
+            border-radius:12px;
+            cursor:grab;
+            user-select:none;
+            touch-action:none;
+            z-index:2147483647;
+            box-sizing:border-box;
+            box-shadow:0 0 5px black,inset 0 0 8px #555;
+        `;
+
+        const img = document.createElement('img');
+        img.src = ICON_URL;
+        img.style.cssText = `
+            width:64px;
+            height:64px;
+            object-fit:contain;
+            pointer-events:none;
+            user-select:none;
+        `;
+
+        button.appendChild(img);
+
+        if (crossed) {
+            const line = document.createElement('div');
+            line.style.cssText = `
+                position:absolute;
+                left:4px;
+                top:35px;
+                width:66px;
+                height:7px;
+                background:#ff0000;
+                border:1px solid #990000;
+                border-radius:4px;
+                transform:rotate(-45deg);
+                pointer-events:none;
+                box-shadow:0 0 3px black;
+            `;
+            button.appendChild(line);
+        }
+
+        button.title = title;
+        document.body.appendChild(button);
+
+        const wasMoved = makeDraggable(button, storage);
+
+        button.addEventListener('click', () => {
+            if (wasMoved()) return;
+            if (!onButovoPage()) return;
+            callback();
+        });
+
+        return button;
+    }
+
+    function updateVisibility() {
+        if (sendBtn && sendBtn.isConnected) {
+            sendBtn.style.display = onButovoPage() ? 'flex' : 'none';
+        }
+
+        if (toggleBtn && toggleBtn.isConnected) {
+            toggleBtn.style.display = onButovoPage() ? 'flex' : 'none';
+        }
+    }
+
+    function ensure() {
+        if (!document.body) return;
+
+        if (!document.getElementById(BUTTON_SEND_ID)) {
+            sendBtn = createButton(
+                BUTTON_SEND_ID,
+                STORAGE_SEND,
+                20,
+                200,
+                false,
+                'Отправить грузовики 1–17',
+                sendAllTrucks
+            );
+        } else {
+            sendBtn = document.getElementById(BUTTON_SEND_ID);
+        }
+
+        if (!document.getElementById(BUTTON_TOGGLE_ID)) {
+            toggleBtn = createButton(
+                BUTTON_TOGGLE_ID,
+                STORAGE_TOGGLE,
+                110,
+                200,
+                true,
+                'Переключить грузовики 1–13 и 16–17',
+                toggleAllTrucks
+            );
+        } else {
+            toggleBtn = document.getElementById(BUTTON_TOGGLE_ID);
+        }
+
+        updateVisibility();
+    }
+
+    window.mwPatriotTrucksActivator = { ensure };
+
+    ensure();
+
+    setInterval(ensure, 500);
+
+    new MutationObserver(() => {
+        ensure();
+    }).observe(document.documentElement, {
+        childList: true,
+        subtree: true
+    });
+
+})();
+
+
 
 
 // Нажиматель лабубу кроме нефти и крыс
