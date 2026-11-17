@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        11.3
+// @version        11.5
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -17,8 +17,6 @@
 
 
 //скрипт на перенос и увеличение кнопок смены страны в рейдах
-
-
 
 (function () {
     'use strict';
@@ -66,29 +64,27 @@
 
         if (!countryBlock || !footer) return;
 
-        const leftArrow = countryBlock.querySelector(
-            'a[onclick="Worldtour2.goToLevel(9)"]'
-        );
+        // Ищем стрелки по классам и получаем их ссылки.
+        const leftIcon = document.querySelector('.mh-arrow-left');
+        const rightIcon = document.querySelector('.mh-arrow-right');
 
-        const rightArrow = countryBlock.querySelector(
-            'a[onclick="Worldtour2.goToLevel(11)"]'
-        );
+        const leftArrow = leftIcon ? leftIcon.closest('a') : null;
+        const rightArrow = rightIcon ? rightIcon.closest('a') : null;
 
-        const changeOpponent = footer.querySelector(
-            'button[onclick="Worldtour2.doRoll();"]'
-        );
+        const buttons = footer.querySelectorAll('button');
 
-        const top20 = footer.querySelector(
-            'button[onclick="Worldtour2.doRoll2();"]'
-        );
+        if (!leftArrow || !rightArrow || buttons.length < 2) return;
 
-        if (!leftArrow || !rightArrow || !changeOpponent || !top20) return;
+        const changeOpponent = buttons[0];
+        const top20 = buttons[1];
 
+        // Левая стрелка — перед кнопкой смены противника.
         if (leftArrow.parentElement !== footer ||
             leftArrow.nextElementSibling !== changeOpponent) {
             footer.insertBefore(leftArrow, changeOpponent);
         }
 
+        // Правая стрелка — после кнопки поиска Топ-20.
         if (rightArrow.parentElement !== footer ||
             rightArrow.previousElementSibling !== top20) {
             footer.insertBefore(rightArrow, top20.nextSibling);
@@ -115,6 +111,10 @@
 
     init();
 })();
+
+
+
+
 
 
 
