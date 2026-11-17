@@ -2,7 +2,7 @@
 // @name           Moswar крутой
 // @author         Магнус
 // @namespace      Империум человечества
-// @version        11.2
+// @version        11.3
 // @description    лучшатора для мосвара
 // @include        https://*.moswar.ru*
 // @include        https://*.moswar.net*
@@ -13,6 +13,109 @@
 // ==/UserScript==
 // @downloadURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
+
+
+
+//скрипт на перенос и увеличение кнопок смены страны в рейдах
+
+
+
+(function () {
+    'use strict';
+
+    const STYLE_ID = 'mw-big-country-arrows-style';
+
+    function addStyles() {
+        if (document.getElementById(STYLE_ID)) return;
+
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+
+        style.textContent = `
+            .worldtour__footer-actions-2.mw-arrows-ready {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+            }
+
+            .mw-big-country-arrow {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                padding: 30px !important;
+                margin: 6px !important;
+                cursor: pointer !important;
+                flex-shrink: 0 !important;
+            }
+
+            .mw-big-country-arrow i {
+                display: inline-block !important;
+                transform: scale(3) !important;
+                transform-origin: center !important;
+            }
+        `;
+
+        document.head.appendChild(style);
+    }
+
+    function moveArrows() {
+        const countryBlock = document.querySelector('.travel2-country-select-block');
+        const footer = document.querySelector('.worldtour__footer-actions-2');
+
+        if (!countryBlock || !footer) return;
+
+        const leftArrow = countryBlock.querySelector(
+            'a[onclick="Worldtour2.goToLevel(9)"]'
+        );
+
+        const rightArrow = countryBlock.querySelector(
+            'a[onclick="Worldtour2.goToLevel(11)"]'
+        );
+
+        const changeOpponent = footer.querySelector(
+            'button[onclick="Worldtour2.doRoll();"]'
+        );
+
+        const top20 = footer.querySelector(
+            'button[onclick="Worldtour2.doRoll2();"]'
+        );
+
+        if (!leftArrow || !rightArrow || !changeOpponent || !top20) return;
+
+        if (leftArrow.parentElement !== footer ||
+            leftArrow.nextElementSibling !== changeOpponent) {
+            footer.insertBefore(leftArrow, changeOpponent);
+        }
+
+        if (rightArrow.parentElement !== footer ||
+            rightArrow.previousElementSibling !== top20) {
+            footer.insertBefore(rightArrow, top20.nextSibling);
+        }
+
+        leftArrow.classList.add('mw-big-country-arrow');
+        rightArrow.classList.add('mw-big-country-arrow');
+        footer.classList.add('mw-arrows-ready');
+    }
+
+    function init() {
+        addStyles();
+        moveArrows();
+
+        const observer = new MutationObserver(() => {
+            moveArrows();
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+
+    init();
+})();
+
 
 
 //скрипт на рейды автобой
@@ -317,6 +420,7 @@
 
 
 
+
 (function () {
     'use strict';
 
@@ -449,6 +553,22 @@
         }, 500);
     }
 
+    function buyRequest(truck) {
+        return fetch('https://www.moswar.ru/butovo/crimea/', {
+            headers: {
+                'accept': 'application/json, text/javascript, */*; q=0.01',
+                'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'x-requested-with': 'XMLHttpRequest'
+            },
+            referrer: 'https://www.moswar.ru/butovo/',
+            body: `action=patriot-buy&truck=${truck}&currency=0&mode=truck`,
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'include'
+        });
+    }
+
     function sendRequest(truck) {
         return fetch('https://www.moswar.ru/butovo/crimea/', {
             headers: {
@@ -491,31 +611,82 @@
         runningSend = true;
         sendBtn.style.background = '#996600';
 
-        const promises = [];
+        try {
+            const buyPromises = [];
 
-        for (let truck = 0; truck <= 17; truck++) {
-            promises.push(
-                sendRequest(truck).then(response => {
-                    if (!response.ok) {
-                        console.warn(`Отправка truck=${truck}: HTTP ${response.status}`);
-                    }
-                    return response;
-                })
+            for (let truck = 0; truck <= 17; truck++) {
+                buyPromises.push(
+                    buyRequest(truck).then(response => {
+                        if (!response.ok) {
+                            console.warn(`Закупка truck=${truck}: HTTP ${response.status}`);
+                        }
+                        return response;
+                    })
+                );
+            }
+
+            console.log('Запущены 18 запросов закупки грузовиков.');
+
+            const buyResults = await Promise.allSettled(buyPromises);
+
+            const buyErrors = buyResults.filter(result =>
+                result.status === 'rejected'
             );
+
+            const buyHttpErrors = buyResults.filter(result =>
+                result.status === 'fulfilled' && !result.value.ok
+            );
+
+            if (buyErrors.length || buyHttpErrors.length) {
+                console.error('Ошибки закупки:', {
+                    rejected: buyErrors,
+                    httpErrors: buyHttpErrors
+                });
+            }
+
+            console.log('Все запросы закупки завершились. Начинаем отправку.');
+
+            const sendPromises = [];
+
+            for (let truck = 0; truck <= 17; truck++) {
+                sendPromises.push(
+                    sendRequest(truck).then(response => {
+                        if (!response.ok) {
+                            console.warn(`Отправка truck=${truck}: HTTP ${response.status}`);
+                        }
+                        return response;
+                    })
+                );
+            }
+
+            console.log('Запущены 18 запросов отправки грузовиков.');
+
+            const sendResults = await Promise.allSettled(sendPromises);
+
+            const sendErrors = sendResults.filter(result =>
+                result.status === 'rejected'
+            );
+
+            const sendHttpErrors = sendResults.filter(result =>
+                result.status === 'fulfilled' && !result.value.ok
+            );
+
+            if (sendErrors.length || sendHttpErrors.length) {
+                console.error('Ошибки отправки:', {
+                    rejected: sendErrors,
+                    httpErrors: sendHttpErrors
+                });
+            }
+
+            console.log('Все запросы отправки завершились.');
+        } catch (error) {
+            console.error('Ошибка выполнения закупки или отправки:', error);
+            showMessage('ОШИБКА. СМОТРИ КОНСОЛЬ', '#cc0000', 3000);
+            return;
+        } finally {
+            runningSend = false;
         }
 
-        console.log('Запущено 18 запросов отправки грузовиков.');
-
-        const results = await Promise.allSettled(promises);
-
-        const errors = results.filter(result => result.status === 'rejected');
-        if (errors.length) {
-            console.error('Ошибок отправки:', errors);
-        }
-
-        console.log('Все запросы отправки завершились.');
-
-        runningSend = false;
         finishAndReload();
     }
 
@@ -647,7 +818,7 @@
                 20,
                 200,
                 false,
-                'Отправить грузовики 1–17',
+                'Сначала закупить грузовики 0–17, затем отправить 0–17',
                 sendAllTrucks
             );
         } else {
@@ -685,6 +856,7 @@
     });
 
 })();
+
 
 
 
