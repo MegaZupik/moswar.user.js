@@ -15,6 +15,753 @@
 // @updateURL https://github.com/MegaZupik/moswar.user.js/raw/refs/heads/main/moswar.user.js
 
 
+//скрипт на прохождение и сброс рейдов 
+(function () {
+    'use strict';
+
+    const BUTTON_ID = 'mw-dungeon-autoplay-btn';
+    const STORAGE_KEY = 'mw-dungeon-autoplay-position';
+
+function isDungeonPage() {
+    return /^\/dungeon(?:\/|$)/i.test(location.pathname);
+}
+
+    function getPosition() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+                left: 20,
+                top: 200
+            };
+        } catch (e) {
+            return { left: 20, top: 200 };
+        }
+    }
+
+    function savePosition(left, top) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ left, top }));
+    }
+
+    function startAutomation() {
+        if (!isDungeonPage()) return;
+
+        if (window.__mwDungeonAutoplayStarted) {
+            alert('Автопрохождение уже запущено!');
+            return;
+        }
+
+        window.__mwDungeonAutoplayStarted = true;
+
+        try {
+            (0, eval)(`
+               // Конфигурация таймингов (в миллисекундах)
+var CONFIG = {
+    MAIN_LOOP_INTERVAL: 200, // Интервал основного цикла mainMoveLoop
+    FIGHT_STEP_DELAY: 3000,  // Задержка перед выполнением шага в бою
+    GROUP_FIGHT_INTERVAL: 7000, // Интервал для групповых боев
+    ROOM_TRANSITION_DELAY: 100, // Задержка при переходе между комнатами
+    HEAL_CHECK_DELAY: 800,     // Задержка для проверки здоровья
+    OBJECT_USE_DELAY: 3000,    // Задержка для использования объектов
+    EXIT_DELAY: 6000,          // Задержка перед выходом из подземелья
+    GROUP_FIGHT_START_DELAY: 10000 // Задержка перед началом группового боя
+};
+
+// Минимальный уровень здоровья для лечения
+var MIN_HEALTH_PERCENT = 50;
+
+// Флаги для отслеживания состояния
+var FLAGS = {
+    VISITED_ROOM_17: false,        // Был в комнате 17
+    VISITED_ROOM_35: false,        // Был в комнате 35
+    VISITED_BURGER: false,         // Был в бургере (room-9)
+    VISITED_AMERICA: false,        // Был в Америке (room-10)
+    VISITED_METRO: false,          // Был в метроже (room-7)
+    VISITED_GEY: false,            // Был в геях (room-8)
+    REACHED_GEY: false,            // Дошел до геев (room-24)
+    USE_BANKA: true,              // Использовать банку
+    EXIT_DUNGEON: false,           // Выход из подземелья
+    USE_SHIP: false,               // Использовать корабль
+    USE_BEAR: false,               // Использовать медведя
+    GO_TO_METRO: false,            // Ходить в метрожу
+    GO_TO_GEY: false,              // Ходить в геи
+    GO_TO_GEY1: false,     // Дополнительный флаг для геев
+    USE_SUSHKI: true,             // Использовать сушки
+    USE_BLIN: true,               // Использовать блины
+    USE_GREN: true,               // Использовать гранаты
+    USE_DINO: false,               // Использовать динозавра
+    USE_DINO_BLOOD: false,         // Использовать кровь динозавра
+    USE_COOKIE: true,             // Использовать печенье
+    FIGHT_GRENA_BOSS: true,       // Бой с боссом гранат
+    FIGHT_GRENA_BOSS_GEY: true,   // Бой с боссом в геях
+    USE_BLAST: false,              // Использовать взрыв
+    SAVE_POINT_1: true            // Сохранение в точке 1
+};
+
+// Функция для проверки одиночного боя
+function checkSingleFight() {
+    if ($("#controls-forward").length > 0) {
+        fightForward();
+        setTimeout(function(){ AngryAjax.goToUrl("/dungeon/inside/", event); }, 25);
+    }
+}
+
+// Проверка здоровья и лечение, если ниже минимального
+function checkMyHealth() {
+    if ($('.my-line').find(".percent").length > 0) {
+        if ($('.my-line').find(".percent").css("width").slice(0, -2) * 1 < MIN_HEALTH_PERCENT) {
+            Dungeon.heal();
+        }
+    }
+}
+
+// Полное восстановление здоровья
+function HealMe() {
+    if ($('.my-line').find(".percent").length > 0) {
+        if ($('.my-line').find(".percent").css("width").slice(0, -2) * 1 < 100) {
+            Dungeon.heal();
+        }
+    }
+}
+
+// Бой с групповым боссом
+function listGroupBossFight() {
+    try {
+        if ($("div.result").length != 1 && $('.radio-attack').filter(':first').length > 0) {
+            setTimeout(function() {
+                var liNo = Number($(".current").html());
+                if (liNo > 2 && liNo <= 5 && FLAGS.USE_DINO_BLOOD) {
+                    $("#useabl--313").trigger('click');
+                    $("#useabl--314").trigger('click');
+                } else {
+                    $('.radio-attack').filter(':first').prop('checked', true);
+                }
+                groupFightMakeStep();
+            }, CONFIG.FIGHT_STEP_DELAY);
+            setTimeout(listGroupBossFight, CONFIG.GROUP_FIGHT_INTERVAL);
+        } else {
+            setTimeout(function(){ AngryAjax.goToUrl("/dungeon/inside/", event); }, 1000);
+            timer1 = setInterval('mainMoveLoop()', CONFIG.MAIN_LOOP_INTERVAL);
+        }
+    } catch (e) {}
+}
+
+// Бой с Обамой
+function listGroupObamaFight() {
+    try {
+        var liNo = Number($(".current").html());
+        if ($("div.result").length != 1 && $('.radio-attack').filter(':first').length > 0) {
+            if (liNo > 0 && liNo <= 1 && FLAGS.FIGHT_GRENA_BOSS) {
+                jQuery('img[src*="obj/gifts2026/sept/food/cheese.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/8march3/fight_item/5.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/halloween/2017/9.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/halloween/2017/4.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/8march5/fight_item/4.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/8march5/fight_item/5.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/weapon46.png"]').parent().find("input[type=radio]").first().trigger('click');
+                groupFightMakeStep();
+            } else if (liNo < 5 && FLAGS.USE_DINO_BLOOD) {
+                $("#useabl--313").trigger('click');
+                groupFightMakeStep();
+                if (liNo > 2 && liNo <= 5 && FLAGS.USE_DINO_BLOOD) {
+                    $("#useabl--314").trigger('click');
+                }
+            } else {
+                if (liNo == 9 && FLAGS.USE_SHIP) {
+                    setTimeout(function() { $("#useabl-171").trigger('click'); groupFightMakeStep(); }, CONFIG.FIGHT_STEP_DELAY);
+                } else if (liNo == 6 && FLAGS.USE_BEAR) {
+                    setTimeout(function() { $("#useabl-3").trigger('click'); groupFightMakeStep(); }, CONFIG.FIGHT_STEP_DELAY);
+                } else {
+                    setTimeout(function() { $('.radio-attack').filter(':first').prop('checked', true); groupFightMakeStep(); }, CONFIG.FIGHT_STEP_DELAY);
+                }
+            }
+            setTimeout(listGroupObamaFight, CONFIG.GROUP_FIGHT_INTERVAL);
+        } else {
+            setTimeout(function(){ AngryAjax.goToUrl("/dungeon/inside/", event); }, 1000);
+            timer1 = setInterval('mainMoveLoop()', CONFIG.MAIN_LOOP_INTERVAL);
+        }
+    } catch (e) {}
+}
+
+// Бой в геях
+function listGroupGeyFight() {
+    try {
+        var liNo = Number($(".current").html());
+        if ($("div.result").length != 1 && $('.radio-attack').filter(':first').length > 0) {
+            if (liNo > 0 && liNo <= 1 && FLAGS.FIGHT_GRENA_BOSS_GEY) {
+                jQuery('img[src*="obj/fight_item/weapon89.png"]').parent().find("input[type=radio]").first().trigger('click');
+                groupFightMakeStep();
+            } else {
+                if ((liNo > 5 && liNo < 8 || liNo > 10 && liNo < 13 || liNo > 15 && liNo < 18 || liNo > 20 && liNo < 23) && FLAGS.USE_BLAST) {
+                    $('.list-users').find('.dead').remove();
+                    setTimeout(function() { $('.radio-attack').filter(':last').prop('checked', true); groupFightMakeStep(); }, 1000);
+                } else {
+                    setTimeout(function() { $('.radio-attack').filter(':first').prop('checked', true); groupFightMakeStep(); }, 500);
+                }
+            }
+            setTimeout(listGroupGeyFight, CONFIG.GROUP_FIGHT_INTERVAL);
+        } else {
+            setTimeout(function(){ AngryAjax.goToUrl("/dungeon/inside/", event); }, 1000);
+            timer1 = setInterval('mainMoveLoop()', CONFIG.MAIN_LOOP_INTERVAL);
+        }
+    } catch (e) {}
+}
+
+// Обычный групповой бой
+function listGroupFight() {
+    try {
+        var liNo = Number($(".current").html());
+        if ($("div.result").length != 1 && $('.radio-attack').filter(':first').length > 0) {
+            if (FLAGS.USE_DINO && liNo > 0) {
+                $("#useabl--310").trigger('click');
+            } else if ((liNo > 0 && liNo <= 1 && FLAGS.USE_GREN) || (liNo > 0 && liNo <= 1 && FLAGS.USE_SUSHKI)) {
+                jQuery('img[src*="obj/gifts2026/sept/food/cheese.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/8march3/fight_item/5.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/halloween/2017/9.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/halloween/2017/4.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/8march5/fight_item/4.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/8march5/fight_item/5.png"]').parent().find("input[type=radio]").first().trigger('click');
+                jQuery('img[src*="obj/weapon46.png"]').parent().find("input[type=radio]").first().trigger('click');
+            }
+            setTimeout(function() { groupFightMakeStep(); }, 500);
+            setTimeout(listGroupFight, CONFIG.GROUP_FIGHT_INTERVAL);
+        } else {
+            setTimeout(function(){ AngryAjax.goToUrl("/dungeon/inside/", event); }, 500);
+            timer1 = setInterval('mainMoveLoop()', CONFIG.MAIN_LOOP_INTERVAL);
+        }
+    } catch (e) {}
+}
+
+// Основной цикл перемещения по комнатам
+function mainMoveLoop() {
+    switch (DungeonViewer.roomCurrent) {
+        case "room-41":
+            checkSingleFight();
+            DungeonViewer.tryToGoToRoom('room-1');
+            break;
+        case "room-1":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-4").length > 0) DungeonViewer.tryToGoToRoom('room-4'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-4":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-2").length > 0) DungeonViewer.tryToGoToRoom('room-2'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            clearInterval(timer1);
+            setTimeout(function(){ listGroupFight(); }, 300);
+            break;
+        case "room-2":
+            checkSingleFight();
+            if (FLAGS.GO_TO_METRO && !FLAGS.VISITED_METRO) {
+                setTimeout(function(){ if ($(".goto-room-3").length > 0) DungeonViewer.tryToGoToRoom('room-3'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-13").length > 0) DungeonViewer.tryToGoToRoom('room-13'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-3":
+            checkSingleFight();
+            if (FLAGS.GO_TO_METRO && !FLAGS.VISITED_METRO) {
+                setTimeout(function(){ if ($(".goto-room-5").length > 0) DungeonViewer.tryToGoToRoom('room-5'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-2").length > 0) DungeonViewer.tryToGoToRoom('room-2'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-5":
+            checkSingleFight();
+            if (FLAGS.GO_TO_METRO && !FLAGS.VISITED_METRO) {
+                setTimeout(function(){ if ($(".goto-room-11").length > 0) DungeonViewer.tryToGoToRoom('room-11'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-3").length > 0) DungeonViewer.tryToGoToRoom('room-3'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-11":
+            checkSingleFight();
+            if (FLAGS.GO_TO_METRO && !FLAGS.VISITED_METRO) {
+                setTimeout(function(){ if ($(".goto-room-6").length > 0) DungeonViewer.tryToGoToRoom('room-6'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-5").length > 0) DungeonViewer.tryToGoToRoom('room-5'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-6":
+            checkSingleFight();
+            if (FLAGS.GO_TO_METRO && !FLAGS.VISITED_METRO) {
+                setTimeout(function(){ if ($(".goto-room-46").length > 0) DungeonViewer.tryToGoToRoom('room-46'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-11").length > 0) DungeonViewer.tryToGoToRoom('room-11'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-46":
+            checkSingleFight();
+            if (FLAGS.GO_TO_METRO && !FLAGS.VISITED_METRO) {
+                setTimeout(function(){ if ($(".goto-room-7").length > 0) DungeonViewer.tryToGoToRoom('room-7'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-6").length > 0) DungeonViewer.tryToGoToRoom('room-6'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-7":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { checkMyHealth(); }}, CONFIG.HEAL_CHECK_DELAY);
+            if (!FLAGS.VISITED_METRO) {
+                FLAGS.VISITED_METRO = true;
+                setTimeout(function(){ Dungeon.useObject(7, 3); }, CONFIG.OBJECT_USE_DELAY);
+                clearInterval(timer1);
+                setTimeout(function(){ listGroupObamaFight(); }, CONFIG.GROUP_FIGHT_START_DELAY);
+            } else {
+                setTimeout(function(){ Dungeon.useObject(7, 4); }, 2000);
+                if (FLAGS.USE_SUSHKI) { setTimeout(function(){ Dungeon.useObject(7, 0); }, 4000); }
+                setTimeout(function(){ if ($(".goto-room-46").length > 0) DungeonViewer.tryToGoToRoom('room-46'); }, 7000);
+            }
+            break;
+        case "room-13":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-14").length > 0) DungeonViewer.tryToGoToRoom('room-14'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-14":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-15").length > 0) DungeonViewer.tryToGoToRoom('room-15'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-15":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-16").length > 0) DungeonViewer.tryToGoToRoom('room-16'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            clearInterval(timer1);
+            setTimeout(function(){ listGroupFight(); }, 200);
+            break;
+        case "room-16":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-25").length > 0) DungeonViewer.tryToGoToRoom('room-25'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-25":
+            checkSingleFight();
+            if ((FLAGS.SAVE_POINT_1 && !FLAGS.VISITED_ROOM_17) || (FLAGS.GO_TO_GEY && !FLAGS.REACHED_GEY)) {
+                setTimeout(function(){ if ($(".goto-room-17").length > 0) DungeonViewer.tryToGoToRoom('room-17'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-26").length > 0) DungeonViewer.tryToGoToRoom('room-26'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-17":
+            checkSingleFight();
+            if (FLAGS.SAVE_POINT_1) {
+                FLAGS.VISITED_ROOM_17 = true;
+                setTimeout(function(){ Dungeon.useObject(17, 0); }, 200);
+            }
+            if (FLAGS.GO_TO_GEY && !FLAGS.REACHED_GEY) {
+                setTimeout(function(){ if ($(".goto-room-18").length > 0) DungeonViewer.tryToGoToRoom('room-18'); }, 300);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-25").length > 0) DungeonViewer.tryToGoToRoom('room-25'); }, 300);
+            }
+            break;
+        case "room-18":
+            checkSingleFight();
+            if (FLAGS.GO_TO_GEY && !FLAGS.REACHED_GEY) {
+                setTimeout(function(){ if ($(".goto-room-19").length > 0) DungeonViewer.tryToGoToRoom('room-19'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-17").length > 0) DungeonViewer.tryToGoToRoom('room-17'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-19":
+            checkSingleFight();
+            if (FLAGS.GO_TO_GEY && !FLAGS.REACHED_GEY) {
+                setTimeout(function(){ if ($(".goto-room-20").length > 0) DungeonViewer.tryToGoToRoom('room-20'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-18").length > 0) DungeonViewer.tryToGoToRoom('room-18'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-20":
+            checkSingleFight();
+            if (FLAGS.GO_TO_GEY && !FLAGS.REACHED_GEY) {
+                setTimeout(function(){ if ($(".goto-room-22").length > 0) DungeonViewer.tryToGoToRoom('room-22'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-19").length > 0) DungeonViewer.tryToGoToRoom('room-19'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            clearInterval(timer1);
+            setTimeout(function(){ listGroupFight(); }, 300);
+            break;
+        case "room-22":
+            checkSingleFight();
+            if (FLAGS.GO_TO_GEY && !FLAGS.REACHED_GEY) {
+                setTimeout(function(){ if ($(".goto-room-23").length > 0) DungeonViewer.tryToGoToRoom('room-23'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-20").length > 0) DungeonViewer.tryToGoToRoom('room-20'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-23":
+            checkSingleFight();
+            if (FLAGS.GO_TO_GEY && !FLAGS.REACHED_GEY) {
+                setTimeout(function(){ if ($(".goto-room-24").length > 0) DungeonViewer.tryToGoToRoom('room-24'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-22").length > 0) DungeonViewer.tryToGoToRoom('room-22'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-24":
+            checkSingleFight();
+            if (FLAGS.GO_TO_GEY1 && !FLAGS.REACHED_GEY) {
+                setTimeout(function(){ if ($(".goto-room-8").length > 0) DungeonViewer.tryToGoToRoom('room-8'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                FLAGS.REACHED_GEY = true;
+                setTimeout(function(){ if ($(".goto-room-23").length > 0) DungeonViewer.tryToGoToRoom('room-23'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-8":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { checkMyHealth(); }}, CONFIG.HEAL_CHECK_DELAY);
+            if (!FLAGS.REACHED_GEY) {
+                FLAGS.REACHED_GEY = true;
+                setTimeout(function(){ Dungeon.useObject(8, 3); }, CONFIG.OBJECT_USE_DELAY);
+                clearInterval(timer1);
+                setTimeout(function(){ listGroupGeyFight(); }, CONFIG.GROUP_FIGHT_START_DELAY);
+            } else {
+                setTimeout(function(){ Dungeon.useObject(7, 4); }, 2000);
+                if (FLAGS.USE_BLIN) { setTimeout(function(){ Dungeon.useObject(8, 1); }, 4000); }
+                if (FLAGS.USE_COOKIE) { setTimeout(function(){ Dungeon.useObject(8, 0); }, 4000); }
+                setTimeout(function(){ if ($(".goto-room-24").length > 0) DungeonViewer.tryToGoToRoom('room-24'); }, 7000);
+            }
+            break;
+        case "room-26":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-27").length > 0) DungeonViewer.tryToGoToRoom('room-27'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-27":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-28").length > 0) DungeonViewer.tryToGoToRoom('room-28'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            clearInterval(timer1);
+            setTimeout(function(){ listGroupFight(); }, 300);
+            break;
+        case "room-28":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-42").length > 0) DungeonViewer.tryToGoToRoom('room-42'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-42":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-43").length > 0) DungeonViewer.tryToGoToRoom('room-43'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-43":
+            checkSingleFight();
+            if (!FLAGS.VISITED_ROOM_35 || FLAGS.VISITED_BURGER) {
+                setTimeout(function(){ if ($(".goto-room-30").length > 0) DungeonViewer.tryToGoToRoom('room-30'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-31").length > 0) DungeonViewer.tryToGoToRoom('room-31'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-30":
+            checkSingleFight();
+            if (!FLAGS.VISITED_ROOM_35 || FLAGS.VISITED_BURGER) {
+                setTimeout(function(){ if ($(".goto-room-35").length > 0) DungeonViewer.tryToGoToRoom('room-35'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-43").length > 0) DungeonViewer.tryToGoToRoom('room-43'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-35":
+            checkSingleFight();
+            if (!FLAGS.VISITED_ROOM_35) {
+                setTimeout(function(){ Dungeon.useObject(35, 0); }, 200);
+            }
+            FLAGS.VISITED_ROOM_35 = true;
+            if (!FLAGS.VISITED_BURGER) {
+                setTimeout(function(){ if ($(".goto-room-30").length > 0) DungeonViewer.tryToGoToRoom('room-30'); }, 300);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-36").length > 0) DungeonViewer.tryToGoToRoom('room-36'); }, 300);
+            }
+            break;
+        case "room-31":
+            checkSingleFight();
+            if (!FLAGS.VISITED_BURGER) {
+                setTimeout(function(){ if ($(".goto-room-32").length > 0) DungeonViewer.tryToGoToRoom('room-32'); }, CONFIG.ROOM_TRANSITION_DELAY);
+                clearInterval(timer1);
+                setTimeout(function(){ listGroupFight(); }, 500);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-43").length > 0) DungeonViewer.tryToGoToRoom('room-43'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-32":
+            checkSingleFight();
+            if (!FLAGS.VISITED_BURGER) {
+                setTimeout(function(){ if ($(".goto-room-33").length > 0) DungeonViewer.tryToGoToRoom('room-33'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-31").length > 0) DungeonViewer.tryToGoToRoom('room-31'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-33":
+            checkSingleFight();
+            if (!FLAGS.VISITED_BURGER) {
+                setTimeout(function(){ if ($(".goto-room-34").length > 0) DungeonViewer.tryToGoToRoom('room-34'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-32").length > 0) DungeonViewer.tryToGoToRoom('room-32'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-34":
+            checkSingleFight();
+            if (!FLAGS.VISITED_BURGER) {
+                setTimeout(function(){ if ($(".goto-room-9").length > 0) DungeonViewer.tryToGoToRoom('room-9'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            } else {
+                setTimeout(function(){ if ($(".goto-room-33").length > 0) DungeonViewer.tryToGoToRoom('room-33'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            }
+            break;
+        case "room-9":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { checkMyHealth(); }}, CONFIG.HEAL_CHECK_DELAY);
+            if (!FLAGS.VISITED_BURGER) {
+                FLAGS.VISITED_BURGER = true;
+                setTimeout(function(){ Dungeon.useObject(9, 4); }, CONFIG.OBJECT_USE_DELAY);
+                clearInterval(timer1);
+                setTimeout(function(){ listGroupObamaFight(); }, CONFIG.GROUP_FIGHT_START_DELAY);
+            } else {
+                setTimeout(function(){ Dungeon.useObject(9, 3); }, 2000);
+                if (FLAGS.USE_BANKA) { setTimeout(function(){ Dungeon.useObject(9, 0); }, 4000); }
+                setTimeout(function(){ if ($(".goto-room-34").length > 0) DungeonViewer.tryToGoToRoom('room-34'); }, 7000);
+            }
+            break;
+        case "room-36":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { HealMe(); }}, CONFIG.HEAL_CHECK_DELAY);
+            setTimeout(function(){ if ($(".goto-room-44").length > 0) DungeonViewer.tryToGoToRoom('room-44'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-44":
+            checkSingleFight();
+            setTimeout(function(){ if ($(".goto-room-37").length > 0) DungeonViewer.tryToGoToRoom('room-37'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            clearInterval(timer1);
+            setTimeout(function(){ listGroupFight(); }, 300);
+            break;
+        case "room-37":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { HealMe(); }}, CONFIG.HEAL_CHECK_DELAY);
+            setTimeout(function(){ if ($(".goto-room-38").length > 0) DungeonViewer.tryToGoToRoom('room-38'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-38":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { HealMe(); }}, CONFIG.HEAL_CHECK_DELAY);
+            setTimeout(function(){ if ($(".goto-room-39").length > 0) DungeonViewer.tryToGoToRoom('room-39'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-39":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { HealMe(); }}, CONFIG.HEAL_CHECK_DELAY);
+            setTimeout(function(){ if ($(".goto-room-40").length > 0) DungeonViewer.tryToGoToRoom('room-40'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-40":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { HealMe(); }}, CONFIG.HEAL_CHECK_DELAY);
+            setTimeout(function(){ if ($(".goto-room-10").length > 0) DungeonViewer.tryToGoToRoom('room-10'); }, CONFIG.ROOM_TRANSITION_DELAY);
+            break;
+        case "room-10":
+            checkSingleFight();
+            setTimeout(function(){ if ($('.my-line').length > 0) { Dungeon.heal(); }}, CONFIG.HEAL_CHECK_DELAY);
+            if (!FLAGS.VISITED_AMERICA) {
+                FLAGS.VISITED_AMERICA = true;
+                setTimeout(function(){ Dungeon.useObject(10, 2); }, CONFIG.OBJECT_USE_DELAY);
+                clearInterval(timer1);
+                setTimeout(function(){ listGroupObamaFight(); }, CONFIG.GROUP_FIGHT_START_DELAY);
+            } else {
+                setTimeout(function(){ Dungeon.useObject(10, 1); }, 2000);
+                clearInterval(timer1);
+                if (FLAGS.EXIT_DUNGEON) { setTimeout(function(){ Groups.leave('dungeon'); }, CONFIG.EXIT_DELAY); }
+            }
+            break;
+    }
+}
+
+// Инициализация и запуск
+var lcPerson = $('#personal').html();
+lcPerson = lcPerson.slice(lcPerson.indexOf('<b>') + 3, lcPerson.indexOf(']</b>') + 1);
+
+alert('Привет! ' + lcPerson + ' Что использовать?');
+
+FLAGS.GO_TO_METRO = confirm("Ходить на Метрожу?");
+FLAGS.USE_DINO = confirm("Прогонять Агентов Рыком динозавра (2-ой ход в стенке)?");
+
+// Запуск основного цикла
+var timer1 = setInterval('mainMoveLoop()', CONFIG.MAIN_LOOP_INTERVAL);
+
+            `);
+        } catch (e) {
+            window.__mwDungeonAutoplayStarted = false;
+            console.error('[Автопрохождение] Ошибка запуска:', e);
+            alert('Ошибка запуска автопрохождения: ' + e.message);
+        }
+    }
+
+    function createButton() {
+        if (document.getElementById(BUTTON_ID)) return;
+
+        const button = document.createElement('div');
+        button.id = BUTTON_ID;
+        button.textContent = 'Автопрохождение';
+
+const soloButton = document.createElement('div');
+soloButton.textContent = 'Сброс одиночки';
+
+const groupButton = document.createElement('div');
+groupButton.textContent = 'Сброс групповой';
+
+function styleActionButton(btn) {
+    Object.assign(btn.style, {
+        position: 'absolute',
+        left: '0',
+        width: '125px',
+        height: '32px',
+        background: '#333',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: '2px solid #888',
+        borderRadius: '8px',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        cursor: 'pointer',
+        boxSizing: 'border-box'
+    });
+}
+
+styleActionButton(soloButton);
+styleActionButton(groupButton);
+
+soloButton.style.top = '85px';
+groupButton.style.top = '122px';
+
+soloButton.addEventListener('click', function (e) {
+    e.stopPropagation();
+
+    fetch('/player/json/use/2571194644/', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'accept': 'application/json, text/javascript, */*; q=0.01',
+            'x-requested-with': 'XMLHttpRequest'
+        }
+    }).catch(err => console.error('[Сброс одиночки]', err));
+});
+
+groupButton.addEventListener('click', function (e) {
+    e.stopPropagation();
+
+    fetch('/player/json/use/2426499654/', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'accept': 'application/json, text/javascript, */*; q=0.01',
+            'x-requested-with': 'XMLHttpRequest'
+        }
+    }).catch(err => console.error('[Сброс групповой]', err));
+});
+
+button.appendChild(soloButton);
+button.appendChild(groupButton);
+
+        Object.assign(button.style, {
+            position: 'fixed',
+            width: '125px',
+            height: '80px',
+            padding: '8px',
+            background: '#333',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            border: '3px solid #888',
+            borderRadius: '12px',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            cursor: 'grab',
+            userSelect: 'none',
+            touchAction: 'none',
+            zIndex: '2147483647',
+            boxSizing: 'border-box',
+            boxShadow: '0 0 5px black,inset 0 0 8px #555'
+        });
+
+        const position = getPosition();
+        button.style.left = position.left + 'px';
+        button.style.top = position.top + 'px';
+
+        let dragging = false;
+        let moved = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+button.addEventListener('pointerdown', function (e) {
+    if (e.target !== button) return;
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    dragging = true;
+            moved = false;
+
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = button.offsetLeft;
+            startTop = button.offsetTop;
+
+            button.style.cursor = 'grabbing';
+            button.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+
+        button.addEventListener('pointermove', function (e) {
+            if (!dragging) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                moved = true;
+            }
+
+            button.style.left = Math.max(
+                0,
+                Math.min(window.innerWidth - button.offsetWidth, startLeft + dx)
+            ) + 'px';
+
+            button.style.top = Math.max(
+                0,
+                Math.min(window.innerHeight - button.offsetHeight, startTop + dy)
+            ) + 'px';
+        });
+
+        function stopDragging() {
+            if (!dragging) return;
+
+            dragging = false;
+            button.style.cursor = 'grab';
+            savePosition(button.offsetLeft, button.offsetTop);
+        }
+
+        button.addEventListener('pointerup', stopDragging);
+        button.addEventListener('pointercancel', stopDragging);
+
+        button.addEventListener('click', function (e) {
+            e.stopPropagation();
+
+            if (moved) {
+                moved = false;
+                return;
+            }
+
+            startAutomation();
+        });
+
+        document.body.appendChild(button);
+    }
+
+    function ensureButton() {
+        if (!document.body) return;
+
+        if (!isDungeonPage()) {
+            const oldButton = document.getElementById(BUTTON_ID);
+            if (oldButton) oldButton.remove();
+            return;
+        }
+
+        createButton();
+    }
+
+    ensureButton();
+
+    new MutationObserver(ensureButton).observe(document.documentElement, {
+        childList: true,
+        subtree: true
+    });
+
+    setInterval(ensureButton, 500);
+})();
+
 
 //скрипт на перенос и увеличение кнопок смены страны в рейдах
 
